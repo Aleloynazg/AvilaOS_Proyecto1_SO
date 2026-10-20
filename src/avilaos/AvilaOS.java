@@ -8,13 +8,46 @@ package avilaos;
  *
  * @author alexandraloynaz
  */
+import avilaos.hardware.ClockListener;
+import avilaos.hardware.GlobalClock;
+
 public class AvilaOS {
 
-    /**
-     * @param args the command line arguments
-     */
     public static void main(String[] args) {
-        // TODO code application logic here
+
+        GlobalClock reloj = new GlobalClock(500);
+
+        ClockListener componentePrueba = new ClockListener() {
+            @Override
+            public void onTick(long cycle) {
+
+                System.out.println("Componente recibió el ciclo: " + cycle);
+
+                if (cycle == 2) {
+                    System.out.println("Pausando reloj...");
+                    reloj.pauseClock();
+                }
+
+                if (cycle == 4) {
+                    System.out.println("Deteniendo reloj...");
+                    reloj.stopClock();
+                }
+            }
+        };
+
+        reloj.addListener(componentePrueba);
+        reloj.startClock();
+
+        Thread hiloReanudacion = new Thread(() -> {
+            try {
+                Thread.sleep(2000);
+                System.out.println("Reanudando reloj...");
+                reloj.resumeClock();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        hiloReanudacion.start();
     }
-    
 }
