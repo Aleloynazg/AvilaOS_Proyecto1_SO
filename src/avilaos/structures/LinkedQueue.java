@@ -59,12 +59,37 @@ public class LinkedQueue<T> {
 
     /** Devuelve el elemento en la posición i (0 = primero). */
     public T get(int index) {
-        throw new UnsupportedOperationException("TODO");
+        if (index < 0 || index >= size) {
+            return null;
+        }
+        Node<T> current = head;
+        for (int i = 0; i < index; i++) {
+            current = current.next;
+        }
+        return current.data;
     }
 
     /** Quita un elemento concreto (por ejemplo, un proceso cuyo deadline llegó a 0). */
     public boolean remove(T item) {
-        throw new UnsupportedOperationException("TODO");
+         Node<T> previous = null;
+        Node<T> current = head;
+        while (current != null) {
+            if (current.data == item) {
+                if (previous == null) {
+                    head = current.next;
+                } else {
+                    previous.next = current.next;
+                }
+                if (current == tail) {
+                    tail = previous;
+                }
+                size--;
+                return true;
+            }
+            previous = current;
+            current = current.next;
+        }
+        return false;
     }
 
     /** Inserta respetando el orden dado por el comparador (para EDF y prioridades). */
