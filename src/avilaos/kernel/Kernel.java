@@ -40,5 +40,51 @@ public class Kernel {
             ((SystemEventListener) o).onEvent(cycle, "Computador " + computerId + ": " + message);
         }
     }
+    
+    /**
+     * Un proceso nuevo llega a este computador. Entra a la cola de nuevos.
+     * Devuelve false si pide más memoria que la RAM total (nunca cabría).
+     */
+    public boolean submitProcess(PCB process, long cycle) {
+        if (!memory.fitsInTotal(process.getMemoryRequired())) {
+            log(cycle, "rechaza " + process.getTag() + ": pide "
+                    + process.getMemoryRequired() + " MB y la RAM total es "
+                    + memory.getTotalMemory() + " MB");
+            return false;
+        }
+        process.setState(ProcessState.NEW);
+        process.setArrivalCycle(cycle);
+        newQueue.enqueue(process);
+        log(cycle, process.getTag() + " llega a la cola de nuevos");
+        return true;
+    }
+    
+    /**
+     * Pasa a Listos los procesos de Nuevos que quepan en memoria, en orden
+     * de llegada. Se detiene en el primero que no cabe (para que un proceso
+     * grande no espere para siempre mientras pasan los pequeños).
+     * Devuelve cuántos admitió.
+     */
+    public int admitNewProcesses(long cycle) {
+        int admitted = 0;
+        PCB first = newQueue.peek();
+        while (first != null && memory.allocate(first.getMemoryRequired())) {
+            newQueue.dequeue();
+            first.setState(ProcessState.READY);
+            readyQueue.enqueue(first);
+            admitted++;
+            log(cycle, "admite " + first.getTag() + " (" + first.getMemoryRequired()
+                    + " MB). RAM libre: " + memory.getFreeMemory() + " MB");
+            first = newQueue.peek();
+        }
+        return admitted;
+    }
+    
+    public int getComputerId() { return computerId; }
+    public MemoryManager getMemory() { return memory; }
+    public LinkedQueue<PCB> getNewQueue() { return newQueue; }
+    public LinkedQueue<PCB> getReadyQueue() { return readyQueue; }
+    public LinkedQueue<PCB> getBlockedQueue() { return blockedQueue; }
+    public LinkedQueue<PCB> getTerminatedQueue() { return terminatedQueue; }
 
 }
