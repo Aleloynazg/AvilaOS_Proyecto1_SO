@@ -15,7 +15,6 @@ import avilaos.kernel.process.ProcessState;
 public class CPU implements ClockListener {
 
     private final int computerId;
-
     private PCB currentProcess;
     private CpuMode mode;
 
@@ -43,7 +42,7 @@ public class CPU implements ClockListener {
         return true;
     }
 
-    // Retira el proceso actual para que el kernel lo gestione.
+    // Retira el proceso actual para que Computer y Kernel lo gestionen.
     public synchronized PCB releaseProcess() {
 
         PCB process = currentProcess;
@@ -78,7 +77,7 @@ public class CPU implements ClockListener {
         return currentProcess == null;
     }
 
-    // Se ejecuta cuando llega un ciclo del reloj global.
+    // Ejecuta una instrucción en cada ciclo, si está en modo usuario.
     @Override
     public synchronized void onTick(long cycle) {
 
@@ -88,18 +87,6 @@ public class CPU implements ClockListener {
         );
 
         if (mode != CpuMode.USER || currentProcess == null) {
-            return;
-        }
-
-        if (currentProcess.isFinished()) {
-            currentProcess.terminate(
-                avilaos.kernel.process.TerminationCause.values()[0],
-                cycle
-            );
-
-            currentProcess = null;
-            mode = CpuMode.KERNEL;
-
             return;
         }
 

@@ -66,6 +66,10 @@ public class AvilaOS {
                 System.out.println("RESULTADO");
                 System.out.println("Estado: "
                     + proceso.getState().getLabel());
+                System.out.println("Causa de terminación: "
+                  + proceso.getTerminationCause());
+                System.out.println("Deadline restante: "
+                    + proceso.getDeadline());
                 System.out.println("PC: "
                     + proceso.getProgramCounter());
                 System.out.println("MAR: "

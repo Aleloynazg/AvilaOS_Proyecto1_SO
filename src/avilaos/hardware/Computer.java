@@ -23,7 +23,7 @@ public class Computer implements ClockListener {
     private final CPU cpu;
     private final MemoryManager memory;
     private final Kernel kernel;
-    private final SchedulingPolicy policy;
+    private SchedulingPolicy policy;
 
     public Computer(int id, int capacidadRAM) {
         if (id <= 0) {
@@ -130,5 +130,14 @@ public class Computer implements ClockListener {
                 ciclo
             );
         }
+    }
+    public void setPolicy(SchedulingPolicy policy) {
+        if (policy != null) {
+            this.policy = policy;
+        }
+    }
+
+    public SchedulingPolicy getPolicy() {
+        return policy;
     }
 }
