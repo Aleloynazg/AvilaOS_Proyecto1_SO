@@ -24,6 +24,7 @@ public class Computer implements ClockListener {
     private final MemoryManager memory;
     private final Kernel kernel;
     private SchedulingPolicy policy;
+    private int cyclesCPU;
 
     public Computer(int id, int capacidadRAM) {
         if (id <= 0) {
@@ -40,6 +41,7 @@ public class Computer implements ClockListener {
             kernel.reportEvent(cycle, message);
             });
         this.policy = new FCFSPolicy();
+        this.cyclesCPU = 0;
 
     }
 
@@ -90,51 +92,81 @@ public class Computer implements ClockListener {
         }
     }
 
-    @Override
-    public void onTick(long ciclo) {
-        kernel.tickTimedBlocks(ciclo);
-        kernel.tickDeadlines(ciclo);
-        kernel.admitNewProcesses(ciclo);
+@Override
+public void onTick(long ciclo) {
+    kernel.tickTimedBlocks(ciclo);
+    kernel.tickDeadlines(ciclo);
+    kernel.admitNewProcesses(ciclo);
 
-        PCB procesoActual = cpu.getCurrentProcess();
+    PCB procesoActual = cpu.getCurrentProcess();
 
-        if (procesoActual != null && procesoActual.tickDeadline()) {
-            cpu.releaseProcess();
-            kernel.terminateProcess(
-                procesoActual,
-                TerminationCause.DEADLINE_MISSED,
-                ciclo
-            );
-            procesoActual = null;
-        }
+    
+    // 1. Revisar si el proceso que se ejecuta agotó su deadline.
+    if (procesoActual != null && procesoActual.tickDeadline()) {
+        cpu.releaseProcess();
+        cyclesCPU = 0;
+        kernel.terminateProcess(
+            procesoActual,
+            TerminationCause.DEADLINE_MISSED,
+            ciclo);
 
-        if (cpu.isIdle()) {
-            PCB siguiente = policy.selectNext(kernel.getReadyQueue());
-
-            if (siguiente != null) {
-                cpu.setMode(CpuMode.KERNEL);
-                cpu.assignProcess(siguiente);
-                return;
-            }
-
-            cpu.setMode(CpuMode.KERNEL);
-            return;
-        }
-
-        cpu.setMode(CpuMode.USER);
-        cpu.onTick(ciclo);
-
-        procesoActual = cpu.getCurrentProcess();
-
-        if (procesoActual != null && procesoActual.isFinished()) {
-            cpu.releaseProcess();
-            kernel.terminateProcess(
-                procesoActual,
-                TerminationCause.COMPLETED,
-                ciclo
-            );
-        }
+        procesoActual = null;
     }
+
+    // 2. Revisar si la política exige ceder la CPU.
+    if (procesoActual != null
+            && policy.shouldPreempt(
+                procesoActual,
+                kernel.getReadyQueue(),
+                cyclesCPU)) {
+
+        cpu.releaseProcess();
+        // El proceso no terminó: vuelve a estar listo.
+        procesoActual.setState(
+            avilaos.kernel.process.ProcessState.READY
+        );
+
+        kernel.getReadyQueue().enqueue(procesoActual);
+
+        cyclesCPU = 0;
+        procesoActual = null;
+    }
+
+    // 3. Si la CPU está libre, seleccionar el siguiente proceso.
+    if (cpu.isIdle()) {
+        PCB siguiente = policy.selectNext(kernel.getReadyQueue());
+
+        if (siguiente != null) {
+            cpu.setMode(CpuMode.KERNEL);
+
+            if (cpu.assignProcess(siguiente)) {
+                cyclesCPU = 0;
+            }
+        } else {
+            cpu.setMode(CpuMode.KERNEL);
+        }
+        return;
+    }
+
+    // 4. Ejecutar una instrucción del proceso actual.
+    cpu.setMode(CpuMode.USER);
+    cpu.onTick(ciclo);
+    cyclesCPU++;
+
+    // 5. Comprobar si el proceso terminó.
+    procesoActual = cpu.getCurrentProcess();
+
+    if (procesoActual != null && procesoActual.isFinished()) {
+        cpu.releaseProcess();
+        cyclesCPU = 0;
+
+        kernel.terminateProcess(
+            procesoActual,
+            TerminationCause.COMPLETED,
+            ciclo
+        );
+    }
+}
     public void setPolicy(SchedulingPolicy policy) {
         if (policy != null) {
             this.policy = policy;
