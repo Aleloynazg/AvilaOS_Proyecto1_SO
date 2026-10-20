@@ -82,11 +82,24 @@ public class CPU implements ClockListener {
     @Override
     public synchronized void onTick(long cycle) {
 
+        System.out.println(
+            "Computador " + computerId
+            + " recibió el ciclo " + cycle
+        );
+
         if (mode != CpuMode.USER || currentProcess == null) {
             return;
         }
 
-        if (currentProcess.getState() != ProcessState.RUNNING) {
+        if (currentProcess.isFinished()) {
+            currentProcess.terminate(
+                avilaos.kernel.process.TerminationCause.values()[0],
+                cycle
+            );
+
+            currentProcess = null;
+            mode = CpuMode.KERNEL;
+
             return;
         }
 
