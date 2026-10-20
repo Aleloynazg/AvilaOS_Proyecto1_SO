@@ -18,7 +18,7 @@ public class LinkedQueuePrueba {
         System.out.println("peek: " + cola.peek() + " (esperado: A)");
         System.out.println("dequeue: " + cola.dequeue() + " (esperado: A)");
         System.out.println("Tamaño: " + cola.size() + " (esperado: 2)");
-        
+
         System.out.println("--- 3. get ---");
         System.out.println("get(0): " + cola.get(0) + " (esperado: B)");
         System.out.println("get(1): " + cola.get(1) + " (esperado: C)");
@@ -28,11 +28,11 @@ public class LinkedQueuePrueba {
         cola.enqueue("D");
         System.out.println("remove(C): " + cola.remove("C") + " (esperado: true)");
         System.out.println("remove(Z): " + cola.remove("Z") + " (esperado: false)");
-        System.out.println("Quedan: " + cola.get(0) + " " + cola.get(1) + " (esperado: B D)");
+        imprimir(cola, "B D");
         cola.remove("D");
         cola.enqueue("E");
-        System.out.println("Quedan: " + cola.get(0) + " " + cola.get(1) + " (esperado: B E)");
-        
+        imprimir(cola, "B E");
+
         System.out.println("--- 5. insertSorted (número menor primero) ---");
         LinkedQueue<Integer> prioridades = new LinkedQueue<>();
         ItemComparator<Integer> menorPrimero = (a, b) -> a - b;
@@ -41,15 +41,24 @@ public class LinkedQueuePrueba {
         prioridades.insertSorted(8, menorPrimero);
         prioridades.insertSorted(1, menorPrimero);
         prioridades.insertSorted(5, menorPrimero);
-        String texto = "";
-        for (int i = 0; i < prioridades.size(); i++) {
-            texto = texto + prioridades.get(i) + " ";
+        imprimir(prioridades, "1 2 5 5 8");
+        prioridades.enqueue(9);
+        imprimir(prioridades, "1 2 5 5 8 9");
+
+        System.out.println("--- 6. Vaciar todo y volver a usarla ---");
+        while (!prioridades.isEmpty()) {
+            prioridades.dequeue();
         }
-        System.out.println("Cola: " + texto + "(esperado: 1 2 5 5 8)");
-        
-        System.out.println("--- 6. toArray ---");
-        Object[] copia = prioridades.toArray();
-        System.out.println("Largo: " + copia.length + " (esperado: 5)");
-        System.out.println("Primero: " + copia[0] + " Último: " + copia[4] + " (esperado: 1 y 8)");
+        prioridades.enqueue(7);
+        imprimir(prioridades, "7");
+    }
+
+    private static void imprimir(LinkedQueue<?> cola, String esperado) {
+        Object[] elementos = cola.toArray();
+        StringBuilder texto = new StringBuilder();
+        for (Object e : elementos) {
+            texto.append(e).append(" ");
+        }
+        System.out.println("Cola: " + texto.toString().trim() + " (esperado: " + esperado + ")");
     }
 }
