@@ -41,5 +41,27 @@ public class MemoryManager {
             usedMemory = 0;
         }
     }
+    
+     /** ¿Este tamaño podría caber alguna vez, aunque la RAM estuviera vacía? */
+    public boolean fitsInTotal(int amount) {
+        return amount > 0 && amount <= totalMemory;
+    }
+
+    public int getTotalMemory() {
+        return totalMemory;
+    }
+
+    public int getUsedMemory() {
+        return usedMemory;
+    }
+
+    public int getFreeMemory() {
+        return totalMemory - usedMemory;
+    }
+
+    /** Porcentaje usado, de 0 a 100 (para la barra de la GUI). */
+    public int getUsagePercent() {
+        return usedMemory * 100 / totalMemory;
+    }
 
 }

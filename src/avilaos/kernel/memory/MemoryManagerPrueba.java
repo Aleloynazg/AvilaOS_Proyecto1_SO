@@ -13,5 +13,10 @@ public class MemoryManagerPrueba {
         ram.free(300);
         System.out.println("allocate(250): " + ram.allocate(250) + " (esperado: true)");
         System.out.println("allocate(0): " + ram.allocate(0) + " (esperado: false)");
+        
+        System.out.println("Usados: " + ram.getUsedMemory() + " (esperado: 950)");
+        System.out.println("Libres: " + ram.getFreeMemory() + " (esperado: 50)");
+        System.out.println("Porcentaje: " + ram.getUsagePercent() + " (esperado: 95)");
+        System.out.println("fitsInTotal(1001): " + ram.fitsInTotal(1001) + " (esperado: false)");
     }
 }
