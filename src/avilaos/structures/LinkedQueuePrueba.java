@@ -46,5 +46,10 @@ public class LinkedQueuePrueba {
             texto = texto + prioridades.get(i) + " ";
         }
         System.out.println("Cola: " + texto + "(esperado: 1 2 5 5 8)");
+        
+        System.out.println("--- 6. toArray ---");
+        Object[] copia = prioridades.toArray();
+        System.out.println("Largo: " + copia.length + " (esperado: 5)");
+        System.out.println("Primero: " + copia[0] + " Último: " + copia[4] + " (esperado: 1 y 8)");
     }
 }

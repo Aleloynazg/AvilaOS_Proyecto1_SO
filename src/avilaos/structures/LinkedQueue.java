@@ -112,6 +112,19 @@ public class LinkedQueue<T> {
         }
         size++;
     }
+    
+     /** Copia de la cola en un arreglo normal (para que la GUI la dibuje). */
+    public Object[] toArray() {
+        Object[] result = new Object[size];
+        Node<T> current = head;
+        int i = 0;
+        while (current != null) {
+            result[i] = current.data;
+            i++;
+            current = current.next;
+        }
+        return result;
+    }
 
     public int size() {
         return size;
