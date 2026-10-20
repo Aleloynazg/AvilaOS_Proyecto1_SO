@@ -28,11 +28,20 @@ public class AvilaOS {
         computador1.conectarReloj(reloj);
         computador2.conectarReloj(reloj);
 
+        // Registrar los eventos para mostrarlos en consola.
+        computador1.addEventListener((ciclo, mensaje) -> {
+            System.out.println("Ciclo " + ciclo + ": " + mensaje);
+        });
+
+        computador2.addEventListener((ciclo, mensaje) -> {
+            System.out.println("Ciclo " + ciclo + ": " + mensaje);
+        });
+
         // Crear un proceso de prueba para el computador 1.
         PCB proceso = new PCB(
             "Proceso de prueba",
             1,
-            ProcessType.values()[0],
+            ProcessType.CPU_BOUND,
             1,
             300,
             20,

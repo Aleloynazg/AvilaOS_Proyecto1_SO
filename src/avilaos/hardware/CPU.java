@@ -9,8 +9,10 @@ package avilaos.hardware;
  * @author alexandraloynaz
  */
 
+import avilaos.kernel.SystemEventListener;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessState;
+import java.util.concurrent.Semaphore;
 
 public class CPU implements ClockListener {
 
@@ -18,92 +20,147 @@ public class CPU implements ClockListener {
     private PCB currentProcess;
     private CpuMode mode;
 
+    private final Semaphore semaforo = new Semaphore(1);
+    private SystemEventListener eventListener;
+
     public CPU(int computerId) {
         this.computerId = computerId;
         this.currentProcess = null;
         this.mode = CpuMode.KERNEL;
+        this.eventListener = null;
     }
 
-    // Asigna un proceso listo a la CPU.
-    public synchronized boolean assignProcess(PCB process) {
+    // Permite recibir eventos sin depender directamente de la GUI.
+    public void setEventListener(SystemEventListener listener) {
+        semaforo.acquireUninterruptibly();
 
-        if (process == null || currentProcess != null) {
-            return false;
-        }
-
-        if (process.getState() != ProcessState.READY) {
-            return false;
-        }
-
-        currentProcess = process;
-        currentProcess.setState(ProcessState.RUNNING);
-        mode = CpuMode.USER;
-
-        return true;
-    }
-
-    // Retira el proceso actual para que Computer y Kernel lo gestionen.
-    public synchronized PCB releaseProcess() {
-
-        PCB process = currentProcess;
-
-        currentProcess = null;
-        mode = CpuMode.KERNEL;
-
-        return process;
-    }
-
-    // Permite cambiar el modo de ejecución.
-    public synchronized void setMode(CpuMode mode) {
-
-        if (mode != null) {
-            this.mode = mode;
+        try {
+            this.eventListener = listener;
+        } finally {
+            semaforo.release();
         }
     }
 
-    public synchronized PCB getCurrentProcess() {
-        return currentProcess;
+    private void registrarEvento(long cycle, String message) {
+        if (eventListener != null) {
+            eventListener.onEvent(
+                cycle,
+                "Computador " + computerId + ": " + message
+            );
+        }
     }
 
-    public synchronized CpuMode getMode() {
-        return mode;
+    public boolean assignProcess(PCB process) {
+        semaforo.acquireUninterruptibly();
+
+        try {
+            if (process == null || currentProcess != null) {
+                return false;
+            }
+
+            if (process.getState() != ProcessState.READY) {
+                return false;
+            }
+
+            currentProcess = process;
+            currentProcess.setState(ProcessState.RUNNING);
+            mode = CpuMode.USER;
+
+            return true;
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    public PCB releaseProcess() {
+        semaforo.acquireUninterruptibly();
+
+        try {
+            PCB process = currentProcess;
+
+            currentProcess = null;
+            mode = CpuMode.KERNEL;
+
+            return process;
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    public void setMode(CpuMode mode) {
+        semaforo.acquireUninterruptibly();
+
+        try {
+            if (mode != null) {
+                this.mode = mode;
+            }
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    public PCB getCurrentProcess() {
+        semaforo.acquireUninterruptibly();
+
+        try {
+            return currentProcess;
+        } finally {
+            semaforo.release();
+        }
+    }
+
+    public CpuMode getMode() {
+        semaforo.acquireUninterruptibly();
+
+        try {
+            return mode;
+        } finally {
+            semaforo.release();
+        }
     }
 
     public int getComputerId() {
         return computerId;
     }
 
-    public synchronized boolean isIdle() {
-        return currentProcess == null;
+    public boolean isIdle() {
+        semaforo.acquireUninterruptibly();
+
+        try {
+            return currentProcess == null;
+        } finally {
+            semaforo.release();
+        }
     }
 
-    // Ejecuta una instrucción en cada ciclo, si está en modo usuario.
     @Override
-    public synchronized void onTick(long cycle) {
+    public void onTick(long cycle) {
+        semaforo.acquireUninterruptibly();
 
-        System.out.println(
-            "Computador " + computerId
-            + " recibió el ciclo " + cycle
-        );
+        try {
+            registrarEvento(cycle, "recibió el ciclo " + cycle);
 
-        if (mode != CpuMode.USER || currentProcess == null) {
-            return;
+            if (mode != CpuMode.USER || currentProcess == null) {
+                return;
+            }
+
+            if (currentProcess.isFinished()) {
+                return;
+            }
+
+            currentProcess.advance();
+            currentProcess.incrementCyclesOnCpu();
+            currentProcess.markFirstRun(cycle);
+
+            registrarEvento(
+                cycle,
+                "ejecuta " + currentProcess.getTag()
+                + " | PC: " + currentProcess.getProgramCounter()
+                + " | Instrucciones restantes: "
+                + currentProcess.getRemainingInstructions()
+            );
+        } finally {
+            semaforo.release();
         }
-
-        if (currentProcess.isFinished()) {
-            return;
-        }
-
-        currentProcess.advance();
-        currentProcess.incrementCyclesOnCpu();
-        currentProcess.markFirstRun(cycle);
-
-        System.out.println(
-            "Computador " + computerId
-            + " ejecuta " + currentProcess.getTag()
-            + " | PC: " + currentProcess.getProgramCounter()
-            + " | Instrucciones restantes: "
-            + currentProcess.getRemainingInstructions()
-        );
     }
 }

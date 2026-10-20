@@ -36,7 +36,11 @@ public class Computer implements ClockListener {
         this.cpu = new CPU(id);
         this.memory = new MemoryManager(capacidadRAM);
         this.kernel = new Kernel(id, memory);
+        this.cpu.setEventListener((cycle, message) -> {
+            kernel.reportEvent(cycle, message);
+            });
         this.policy = new FCFSPolicy();
+
     }
 
     public int getId() {
@@ -88,6 +92,9 @@ public class Computer implements ClockListener {
 
     @Override
     public void onTick(long ciclo) {
+        System.out.println(
+        "Computer " + id + " recibió el ciclo " + ciclo
+    );
         kernel.tickTimedBlocks(ciclo);
         kernel.tickDeadlines(ciclo);
         kernel.admitNewProcesses(ciclo);
@@ -140,4 +147,8 @@ public class Computer implements ClockListener {
     public SchedulingPolicy getPolicy() {
         return policy;
     }
+    public void addEventListener(
+        avilaos.kernel.SystemEventListener listener) {
+    kernel.addEventListener(listener);
+}
 }

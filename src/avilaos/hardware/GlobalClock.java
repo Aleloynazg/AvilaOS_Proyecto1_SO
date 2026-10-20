@@ -20,6 +20,7 @@ public class GlobalClock extends Thread {
 
     private boolean started;
 
+    // Protege el estado del reloj y la lista de componentes.
     private final Semaphore controlSemaphore;
 
     // Componentes que reciben cada ciclo del reloj.
@@ -49,68 +50,109 @@ public class GlobalClock extends Thread {
 
     public void setCycleDuration(int cycleDuration) {
         if (cycleDuration >= 50 && cycleDuration <= 5000) {
-            this.cycleDuration = cycleDuration;
+            controlSemaphore.acquireUninterruptibly();
+
+            try {
+                this.cycleDuration = cycleDuration;
+            } finally {
+                controlSemaphore.release();
+            }
         }
     }
 
     // Registra un componente que recibirá los ciclos.
-    public synchronized void addListener(ClockListener listener) {
+    public void addListener(ClockListener listener) {
         if (listener == null) {
             return;
         }
 
-        if (numberOfListeners == listeners.length) {
-            ClockListener[] newListeners =
-                    new ClockListener[listeners.length * 2];
+        controlSemaphore.acquireUninterruptibly();
 
-            for (int i = 0; i < numberOfListeners; i++) {
-                newListeners[i] = listeners[i];
+        try {
+            if (numberOfListeners == listeners.length) {
+                ClockListener[] newListeners =
+                        new ClockListener[listeners.length * 2];
+
+                for (int i = 0; i < numberOfListeners; i++) {
+                    newListeners[i] = listeners[i];
+                }
+
+                listeners = newListeners;
             }
 
-            listeners = newListeners;
+            listeners[numberOfListeners] = listener;
+            numberOfListeners++;
+        } finally {
+            controlSemaphore.release();
         }
-
-        listeners[numberOfListeners] = listener;
-        numberOfListeners++;
     }
 
     // Elimina un componente registrado.
-    public synchronized void removeListener(ClockListener listener) {
-        for (int i = 0; i < numberOfListeners; i++) {
-            if (listeners[i] == listener) {
-                for (int j = i; j < numberOfListeners - 1; j++) {
-                    listeners[j] = listeners[j + 1];
+    public void removeListener(ClockListener listener) {
+        controlSemaphore.acquireUninterruptibly();
+
+        try {
+            for (int i = 0; i < numberOfListeners; i++) {
+                if (listeners[i] == listener) {
+                    for (int j = i; j < numberOfListeners - 1; j++) {
+                        listeners[j] = listeners[j + 1];
+                    }
+
+                    numberOfListeners--;
+                    listeners[numberOfListeners] = null;
+                    return;
                 }
-
-                numberOfListeners--;
-                listeners[numberOfListeners] = null;
-                return;
             }
+        } finally {
+            controlSemaphore.release();
         }
     }
 
-    public synchronized void startClock() {
-        if (!started) {
-            running = true;
+    public void startClock() {
+        controlSemaphore.acquireUninterruptibly();
+
+        try {
+            if (!started) {
+                running = true;
+                paused = false;
+                started = true;
+                start();
+            }
+        } finally {
+            controlSemaphore.release();
+        }
+    }
+
+    public void pauseClock() {
+        controlSemaphore.acquireUninterruptibly();
+
+        try {
+            paused = true;
+        } finally {
+            controlSemaphore.release();
+        }
+    }
+
+    public void resumeClock() {
+        controlSemaphore.acquireUninterruptibly();
+
+        try {
             paused = false;
-            started = true;
-            start();
+        } finally {
+            controlSemaphore.release();
         }
     }
 
-    public synchronized void pauseClock() {
-        paused = true;
-    }
+    public void stopClock() {
+        controlSemaphore.acquireUninterruptibly();
 
-    public synchronized void resumeClock() {
-        paused = false;
-        notifyAll();
-    }
+        try {
+            running = false;
+            paused = false;
+        } finally {
+            controlSemaphore.release();
+        }
 
-    public synchronized void stopClock() {
-        running = false;
-        paused = false;
-        notifyAll();
         interrupt();
     }
 
@@ -118,20 +160,17 @@ public class GlobalClock extends Thread {
     public void run() {
         while (running) {
 
-            synchronized (this) {
-                while (paused && running) {
-                    try {
-                        wait();
-                    } catch (InterruptedException e) {
-                        if (!running) {
-                            return;
-                        }
+            // Mientras esté pausado, espera brevemente sin usar wait().
+            if (paused) {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    if (!running) {
+                        break;
                     }
                 }
-            }
 
-            if (!running) {
-                break;
+                continue;
             }
 
             try {
@@ -141,21 +180,20 @@ public class GlobalClock extends Thread {
                     continue;
                 }
 
+                ClockListener[] listenersToNotify;
+                int totalListeners;
+                long cicloActual;
+
                 controlSemaphore.acquire();
 
                 try {
+                    if (!running || paused) {
+                        continue;
+                    }
+
                     cycle++;
-                } finally {
-                    controlSemaphore.release();
-                }
+                    cicloActual = cycle;
 
-                System.out.println("Ciclo global: " + cycle);
-
-                // Avisar a cada componente del nuevo ciclo.
-                ClockListener[] listenersToNotify;
-                int totalListeners;
-
-                synchronized (this) {
                     totalListeners = numberOfListeners;
                     listenersToNotify =
                             new ClockListener[totalListeners];
@@ -163,15 +201,20 @@ public class GlobalClock extends Thread {
                     for (int i = 0; i < totalListeners; i++) {
                         listenersToNotify[i] = listeners[i];
                     }
+                } finally {
+                    controlSemaphore.release();
                 }
 
+                System.out.println("Ciclo global: " + cicloActual);
+
+                // Avisar a cada componente del nuevo ciclo.
                 for (int i = 0; i < totalListeners; i++) {
                     try {
-                        listenersToNotify[i].onTick(cycle);
+                        listenersToNotify[i].onTick(cicloActual);
                     } catch (RuntimeException e) {
                         System.err.println(
                                 "Error al notificar el ciclo "
-                                + cycle + ": " + e.getMessage()
+                                + cicloActual + ": " + e.getMessage()
                         );
                     }
                 }

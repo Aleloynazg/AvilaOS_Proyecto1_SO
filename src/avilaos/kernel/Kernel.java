@@ -41,6 +41,10 @@ public class Kernel {
         }
     }
     
+    
+    public void reportEvent(long cycle, String message) {
+        log(cycle, message);
+    }
     /**
      * Un proceso nuevo llega a este computador. Entra a la cola de nuevos.
      * Devuelve false si pide más memoria que la RAM total (nunca cabría).
@@ -154,7 +158,7 @@ public class Kernel {
             }
         }
     }
-    
+
     public int getComputerId() { return computerId; }
     public MemoryManager getMemory() { return memory; }
     public LinkedQueue<PCB> getNewQueue() { return newQueue; }
