@@ -8,17 +8,24 @@ package avilaos.hardware;
  *
  * @author alexandraloynaz
  */
-import avilaos.kernel.memory.RAM;
-import avilaos.hardware.GlobalClock;
+import avilaos.kernel.Kernel;
+import avilaos.kernel.memory.MemoryManager;
+import avilaos.kernel.process.PCB;
+import avilaos.kernel.process.TerminationCause;
+import avilaos.kernel.scheduler.SchedulingPolicy;
+import avilaos.kernel.scheduler.FCFSPolicy;
 
-public class Computer {
+
+
+public class Computer implements ClockListener {
 
     private final int id;
     private final CPU cpu;
-    private final RAM ram;
+    private final MemoryManager memory;
+    private final Kernel kernel;
+    private final SchedulingPolicy policy;
 
     public Computer(int id, int capacidadRAM) {
-
         if (id <= 0) {
             throw new IllegalArgumentException(
                 "El identificador debe ser mayor que cero."
@@ -27,7 +34,9 @@ public class Computer {
 
         this.id = id;
         this.cpu = new CPU(id);
-        this.ram = new RAM(capacidadRAM);
+        this.memory = new MemoryManager(capacidadRAM);
+        this.kernel = new Kernel(id, memory);
+        this.policy = new FCFSPolicy();
     }
 
     public int getId() {
@@ -38,8 +47,12 @@ public class Computer {
         return cpu;
     }
 
-    public RAM getRAM() {
-        return ram;
+    public MemoryManager getMemoryManager() {
+        return memory;
+    }
+
+    public Kernel getKernel() {
+        return kernel;
     }
 
     public void mostrarEstado() {
@@ -56,19 +69,66 @@ public class Computer {
 
         System.out.println(
             "Memoria RAM utilizada: "
-            + ram.getMemoriaUtilizada()
+            + memory.getUsedMemory()
             + " / "
-            + ram.getCapacidadTotal()
+            + memory.getTotalMemory()
         );
 
         System.out.println(
             "Memoria RAM disponible: "
-            + ram.getMemoriaDisponible()
+            + memory.getFreeMemory()
         );
     }
+
     public void conectarReloj(GlobalClock reloj) {
         if (reloj != null) {
-            reloj.addListener(cpu);
+            reloj.addListener(this);
+        }
     }
+
+    @Override
+    public void onTick(long ciclo) {
+        kernel.tickTimedBlocks(ciclo);
+        kernel.tickDeadlines(ciclo);
+        kernel.admitNewProcesses(ciclo);
+
+        PCB procesoActual = cpu.getCurrentProcess();
+
+        if (procesoActual != null && procesoActual.tickDeadline()) {
+            cpu.releaseProcess();
+            kernel.terminateProcess(
+                procesoActual,
+                TerminationCause.DEADLINE_MISSED,
+                ciclo
+            );
+            procesoActual = null;
+        }
+
+        if (cpu.isIdle()) {
+            PCB siguiente = policy.selectNext(kernel.getReadyQueue());
+
+            if (siguiente != null) {
+                cpu.setMode(CpuMode.KERNEL);
+                cpu.assignProcess(siguiente);
+                return;
+            }
+
+            cpu.setMode(CpuMode.KERNEL);
+            return;
+        }
+
+        cpu.setMode(CpuMode.USER);
+        cpu.onTick(ciclo);
+
+        procesoActual = cpu.getCurrentProcess();
+
+        if (procesoActual != null && procesoActual.isFinished()) {
+            cpu.releaseProcess();
+            kernel.terminateProcess(
+                procesoActual,
+                TerminationCause.COMPLETED,
+                ciclo
+            );
+        }
     }
 }

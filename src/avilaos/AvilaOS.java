@@ -7,10 +7,10 @@ package avilaos;
  *
  * @author alexandraloynaz
  */
+
 import avilaos.hardware.Computer;
 import avilaos.hardware.GlobalClock;
 import avilaos.kernel.process.PCB;
-import avilaos.kernel.process.ProcessState;
 import avilaos.kernel.process.ProcessType;
 
 public class AvilaOS {
@@ -21,14 +21,14 @@ public class AvilaOS {
         Computer computador1 = new Computer(1, 1000);
         Computer computador2 = new Computer(2, 2000);
 
-        // Crear un reloj global.
+        // Crear el reloj global.
         GlobalClock reloj = new GlobalClock(500);
 
-        // Conectar ambos computadores al reloj.
+        // Conectar los computadores al reloj.
         computador1.conectarReloj(reloj);
         computador2.conectarReloj(reloj);
 
-        // Crear un proceso para el computador 1.
+        // Crear un proceso de prueba para el computador 1.
         PCB proceso = new PCB(
             "Proceso de prueba",
             1,
@@ -39,30 +39,16 @@ public class AvilaOS {
             3
         );
 
-        // Reservar la memoria necesaria para el proceso.
-        boolean memoriaReservada =
-            computador1.getRAM().reservarMemoria(
-                proceso.getMemoryRequired()
-            );
+        // Enviar el proceso al Kernel.
+        boolean recibido = computador1.getKernel()
+            .submitProcess(proceso, reloj.getCycle());
 
-        if (!memoriaReservada) {
-            System.out.println("No hay memoria suficiente.");
+        if (!recibido) {
+            System.out.println("El Kernel rechazó el proceso.");
             return;
         }
 
-        // Simular la admisión del proceso a la cola de listos.
-        proceso.setState(ProcessState.READY);
-
-        // Asignar el proceso a la CPU del computador 1.
-        boolean procesoAsignado =
-            computador1.getCPU().assignProcess(proceso);
-
-        if (!procesoAsignado) {
-            System.out.println("No se pudo asignar el proceso.");
-            return;
-        }
-
-        System.out.println("===== INICIO DE LA PRUEBA =====");
+        System.out.println("Comienzo Prueba");
         System.out.println("Proceso: " + proceso.getTag());
         System.out.println("Instrucciones iniciales: "
             + proceso.getRemainingInstructions());
@@ -77,7 +63,7 @@ public class AvilaOS {
                 reloj.stopClock();
 
                 System.out.println();
-                System.out.println("===== RESULTADO =====");
+                System.out.println("RESULTADO");
                 System.out.println("Estado: "
                     + proceso.getState().getLabel());
                 System.out.println("PC: "
@@ -88,6 +74,8 @@ public class AvilaOS {
                     + proceso.getRemainingInstructions());
                 System.out.println("Ciclos ejecutados en CPU: "
                     + proceso.getCyclesOnCpu());
+
+                computador1.mostrarEstado();
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
