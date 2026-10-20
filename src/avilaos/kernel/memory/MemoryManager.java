@@ -15,5 +15,31 @@ public class MemoryManager {
         }
         this.totalMemory = totalMemory;
     }
+    
+     /**
+     * Intenta reservar memoria. Si hay espacio, la reserva y devuelve true.
+     * Si no hay espacio, no reserva nada y devuelve false.
+     */
+    public boolean allocate(int amount) {
+        if (amount <= 0) {
+            return false;
+        }
+        if (usedMemory + amount > totalMemory) {
+            return false;
+        }
+        usedMemory += amount;
+        return true;
+    }
+
+    /** Libera memoria que se había reservado (cuando un proceso termina). */
+    public void free(int amount) {
+        if (amount <= 0) {
+            return;
+        }
+        usedMemory -= amount;
+        if (usedMemory < 0) {
+            usedMemory = 0;
+        }
+    }
 
 }
