@@ -80,6 +80,29 @@ public class Kernel {
         return admitted;
     }
     
+    /**
+     * Termina un proceso: lo saca de la cola donde esté, libera su memoria
+     * (si la tenía) y revisa si ahora cabe alguno de Nuevos.
+     * Si el proceso estaba en la CPU, la persona A lo saca de la CPU antes.
+     */
+    public void terminateProcess(PCB process, TerminationCause cause, long cycle) {
+        boolean hadMemory = process.getState() != ProcessState.NEW;
+        newQueue.remove(process);
+        readyQueue.remove(process);
+        blockedQueue.remove(process);
+        if (hadMemory) {
+            memory.free(process.getMemoryRequired());
+        }
+        process.terminate(cause, cycle);
+        terminatedQueue.enqueue(process);
+        if (cause == TerminationCause.DEADLINE_MISSED) {
+            log(cycle, process.getTag() + " termina: se venció su deadline");
+        } else {
+            log(cycle, process.getTag() + " termina correctamente");
+        }
+        admitNewProcesses(cycle);
+    }
+    
     public int getComputerId() { return computerId; }
     public MemoryManager getMemory() { return memory; }
     public LinkedQueue<PCB> getNewQueue() { return newQueue; }

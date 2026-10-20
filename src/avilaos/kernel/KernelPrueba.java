@@ -1,4 +1,5 @@
 package avilaos.kernel;
+import avilaos.kernel.process.TerminationCause;
 
 import avilaos.kernel.memory.MemoryManager;
 import avilaos.kernel.process.PCB;
@@ -30,6 +31,10 @@ public class KernelPrueba {
         System.out.println("--- 2. Admisión por memoria ---");
         System.out.println("Admitidos: " + kernel.admitNewProcesses(2) + " (esperado: 2)");
         mostrar(kernel, "Nuevos: P3 | Listos: P1 P2 | Bloqueados: - | Terminados: - | RAM usada: 900");
+        
+        System.out.println("--- 3. Terminar libera memoria y admite al que esperaba ---");
+        kernel.terminateProcess(p1, TerminationCause.COMPLETED, 3);
+        mostrar(kernel, "Nuevos: - | Listos: P2 P3 | Bloqueados: - | Terminados: P1 | RAM usada: 800");
     }
 
     private static void mostrar(Kernel k, String esperado) {
@@ -51,5 +56,8 @@ public class KernelPrueba {
             texto = texto + "P" + ((PCB) o).getId() + " ";
         }
         return texto.trim();
+       
     }
+    
+    
 }
