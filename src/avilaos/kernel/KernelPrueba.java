@@ -1,5 +1,6 @@
 package avilaos.kernel;
 import avilaos.kernel.process.TerminationCause;
+import avilaos.kernel.process.BlockReason;
 
 import avilaos.kernel.memory.MemoryManager;
 import avilaos.kernel.process.PCB;
@@ -35,6 +36,15 @@ public class KernelPrueba {
         System.out.println("--- 3. Terminar libera memoria y admite al que esperaba ---");
         kernel.terminateProcess(p1, TerminationCause.COMPLETED, 3);
         mostrar(kernel, "Nuevos: - | Listos: P2 P3 | Bloqueados: - | Terminados: P1 | RAM usada: 800");
+        
+        System.out.println("--- 4. Bloqueo por E/S de 2 ciclos ---");
+        kernel.getReadyQueue().remove(p2); // (esto lo hará la CPU de Ale al ejecutarlo)
+        kernel.blockProcess(p2, BlockReason.IO, 2, 4);
+        mostrar(kernel, "Nuevos: - | Listos: P3 | Bloqueados: P2 | Terminados: P1 | RAM usada: 800");
+        kernel.tickTimedBlocks(5);
+        mostrar(kernel, "Nuevos: - | Listos: P3 | Bloqueados: P2 | Terminados: P1 | RAM usada: 800");
+        kernel.tickTimedBlocks(6);
+        mostrar(kernel, "Nuevos: - | Listos: P3 P2 | Bloqueados: - | Terminados: P1 | RAM usada: 800");
     }
 
     private static void mostrar(Kernel k, String esperado) {

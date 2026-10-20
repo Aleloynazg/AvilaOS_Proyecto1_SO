@@ -103,6 +103,37 @@ public class Kernel {
         admitNewProcesses(cycle);
     }
     
+    /** Un proceso se bloquea. cycles = cuánto dura (E/S, red); 0 si espera un semáforo. */
+    public void blockProcess(PCB process, BlockReason reason, int cycles, long cycle) {
+        process.block(reason, cycles);
+        blockedQueue.enqueue(process);
+        log(cycle, process.getTag() + " se bloquea: " + reason.getLabel());
+    }
+
+    /** Un proceso bloqueado vuelve a Listos. */
+    public void unblockProcess(PCB process, long cycle) {
+        if (blockedQueue.remove(process)) {
+            process.unblock();
+            readyQueue.enqueue(process);
+            log(cycle, process.getTag() + " se desbloquea y vuelve a Listos");
+        }
+    }
+
+    /** Resta un ciclo a los bloqueos con tiempo (E/S y red) y despierta a los que terminan. */
+    public void tickTimedBlocks(long cycle) {
+        Object[] blocked = blockedQueue.toArray();
+        for (Object o : blocked) {
+            PCB p = (PCB) o;
+            BlockReason reason = p.getBlockReason();
+            if (reason == BlockReason.IO || reason == BlockReason.NETWORK) {
+                p.decrementBlockedCycles();
+                if (p.getBlockedCyclesLeft() == 0) {
+                    unblockProcess(p, cycle);
+                }
+            }
+        }
+    }
+    
     public int getComputerId() { return computerId; }
     public MemoryManager getMemory() { return memory; }
     public LinkedQueue<PCB> getNewQueue() { return newQueue; }
