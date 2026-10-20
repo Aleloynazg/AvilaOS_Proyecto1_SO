@@ -134,6 +134,27 @@ public class Kernel {
         }
     }
     
+    
+    /**
+     * Resta un ciclo al deadline de los procesos en Nuevos, Listos y Bloqueados.
+     * Los que llegan a 0 se terminan. (El proceso en CPU lo maneja la persona A.)
+     */
+    public void tickDeadlines(long cycle) {
+        tickDeadlinesIn(newQueue, cycle);
+        tickDeadlinesIn(readyQueue, cycle);
+        tickDeadlinesIn(blockedQueue, cycle);
+    }
+
+    private void tickDeadlinesIn(LinkedQueue<PCB> queue, long cycle) {
+        Object[] processes = queue.toArray();
+        for (Object o : processes) {
+            PCB p = (PCB) o;
+            if (p.tickDeadline()) {
+                terminateProcess(p, TerminationCause.DEADLINE_MISSED, cycle);
+            }
+        }
+    }
+    
     public int getComputerId() { return computerId; }
     public MemoryManager getMemory() { return memory; }
     public LinkedQueue<PCB> getNewQueue() { return newQueue; }
