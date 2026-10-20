@@ -32,5 +32,19 @@ public class LinkedQueuePrueba {
         cola.remove("D");
         cola.enqueue("E");
         System.out.println("Quedan: " + cola.get(0) + " " + cola.get(1) + " (esperado: B E)");
+        
+        System.out.println("--- 5. insertSorted (número menor primero) ---");
+        LinkedQueue<Integer> prioridades = new LinkedQueue<>();
+        ItemComparator<Integer> menorPrimero = (a, b) -> a - b;
+        prioridades.insertSorted(5, menorPrimero);
+        prioridades.insertSorted(2, menorPrimero);
+        prioridades.insertSorted(8, menorPrimero);
+        prioridades.insertSorted(1, menorPrimero);
+        prioridades.insertSorted(5, menorPrimero);
+        String texto = "";
+        for (int i = 0; i < prioridades.size(); i++) {
+            texto = texto + prioridades.get(i) + " ";
+        }
+        System.out.println("Cola: " + texto + "(esperado: 1 2 5 5 8)");
     }
 }

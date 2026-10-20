@@ -94,7 +94,23 @@ public class LinkedQueue<T> {
 
     /** Inserta respetando el orden dado por el comparador (para EDF y prioridades). */
     public void insertSorted(T item, ItemComparator<T> comparator) {
-        throw new UnsupportedOperationException("TODO");
+        Node<T> newNode = new Node<>(item);
+        Node<T> previous = null;
+        Node<T> current = head;
+        while (current != null && comparator.compare(item, current.data) >= 0) {
+            previous = current;
+            current = current.next;
+        }
+        newNode.next = current;
+        if (previous == null) {
+            head = newNode;
+        } else {
+            previous.next = newNode;
+        }
+        if (current == null) {
+            tail = newNode;
+        }
+        size++;
     }
 
     public int size() {
