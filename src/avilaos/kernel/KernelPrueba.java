@@ -1,10 +1,10 @@
 package avilaos.kernel;
-import avilaos.kernel.process.TerminationCause;
-import avilaos.kernel.process.BlockReason;
 
 import avilaos.kernel.memory.MemoryManager;
+import avilaos.kernel.process.BlockReason;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessType;
+import avilaos.kernel.process.TerminationCause;
 import avilaos.structures.LinkedQueue;
 
 /** Prueba manual del Kernel. Ejecutar con Run File. */
@@ -32,11 +32,11 @@ public class KernelPrueba {
         System.out.println("--- 2. Admisión por memoria ---");
         System.out.println("Admitidos: " + kernel.admitNewProcesses(2) + " (esperado: 2)");
         mostrar(kernel, "Nuevos: P3 | Listos: P1 P2 | Bloqueados: - | Terminados: - | RAM usada: 900");
-        
+
         System.out.println("--- 3. Terminar libera memoria y admite al que esperaba ---");
         kernel.terminateProcess(p1, TerminationCause.COMPLETED, 3);
         mostrar(kernel, "Nuevos: - | Listos: P2 P3 | Bloqueados: - | Terminados: P1 | RAM usada: 800");
-        
+
         System.out.println("--- 4. Bloqueo por E/S de 2 ciclos ---");
         kernel.getReadyQueue().remove(p2); // (esto lo hará la CPU de Ale al ejecutarlo)
         kernel.blockProcess(p2, BlockReason.IO, 2, 4);
@@ -45,6 +45,15 @@ public class KernelPrueba {
         mostrar(kernel, "Nuevos: - | Listos: P3 | Bloqueados: P2 | Terminados: P1 | RAM usada: 800");
         kernel.tickTimedBlocks(6);
         mostrar(kernel, "Nuevos: - | Listos: P3 P2 | Bloqueados: - | Terminados: P1 | RAM usada: 800");
+
+        System.out.println("--- 5. Deadline vencido ---");
+        PCB urgente = new PCB("Urgente", 1, ProcessType.CPU_BOUND, 1, 100, 2, 10);
+        kernel.submitProcess(urgente, 7);
+        kernel.admitNewProcesses(7);
+        kernel.tickDeadlines(8);
+        kernel.tickDeadlines(9);
+        System.out.println("Causa: " + urgente.getTerminationCause() + " (esperado: DEADLINE_MISSED)");
+        mostrar(kernel, "Nuevos: - | Listos: P3 P2 | Bloqueados: - | Terminados: P1 P5 | RAM usada: 800");
     }
 
     private static void mostrar(Kernel k, String esperado) {
@@ -66,8 +75,5 @@ public class KernelPrueba {
             texto = texto + "P" + ((PCB) o).getId() + " ";
         }
         return texto.trim();
-       
     }
-    
-    
 }
