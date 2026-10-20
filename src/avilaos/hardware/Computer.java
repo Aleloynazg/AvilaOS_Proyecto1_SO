@@ -92,9 +92,6 @@ public class Computer implements ClockListener {
 
     @Override
     public void onTick(long ciclo) {
-        System.out.println(
-        "Computer " + id + " recibió el ciclo " + ciclo
-    );
         kernel.tickTimedBlocks(ciclo);
         kernel.tickDeadlines(ciclo);
         kernel.admitNewProcesses(ciclo);

@@ -43,10 +43,7 @@ public class CPU implements ClockListener {
 
     private void registrarEvento(long cycle, String message) {
         if (eventListener != null) {
-            eventListener.onEvent(
-                cycle,
-                "Computador " + computerId + ": " + message
-            );
+            eventListener.onEvent(cycle, message);
         }
     }
 
