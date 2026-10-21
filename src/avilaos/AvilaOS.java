@@ -1,128 +1,37 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Main.java to edit this template
- */
 package avilaos;
-/**
- *
- * @author alexandraloynaz
- */
+
+import avilaos.gui.MainWindow;
 import avilaos.hardware.Computer;
 import avilaos.hardware.GlobalClock;
-import avilaos.kernel.SystemEventListener;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessType;
-import avilaos.kernel.scheduler.RoundRobinPolicy;
+import javax.swing.SwingUtilities;
 
+/** Punto de entrada: arma el sistema y abre la ventana. */
 public class AvilaOS {
 
     public static void main(String[] args) {
+        // 1. El sistema (lógica): 2 computadores y el reloj
+        Computer c1 = new Computer(1, 1000);
+        Computer c2 = new Computer(2, 1000);
+        Computer[] computers = {c1, c2};
 
-        // Crear los dos computadores.
-        Computer computador1 = new Computer(1, 1000);
-        Computer computador2 = new Computer(2, 2000);
+        GlobalClock clock = new GlobalClock(500);
+        c1.conectarReloj(clock);
+        c2.conectarReloj(clock);
 
-        // Configurar Round Robin con quantum de 2 ciclos.
-        computador1.setPolicy(new RoundRobinPolicy(2));
+        // 2. La ventana (observa al sistema)
+        SwingUtilities.invokeLater(() -> {
+            MainWindow window = new MainWindow(clock, computers);
+            window.setVisible(true);
 
-        // Crear el reloj global.
-        final GlobalClock reloj = new GlobalClock(500);
-
-        // Conectar los computadores al reloj.
-        computador1.conectarReloj(reloj);
-        computador2.conectarReloj(reloj);
-
-        // Registrar los eventos del computador 1.
-        computador1.addEventListener(new SystemEventListener() {
-            @Override
-            public void onEvent(long ciclo, String mensaje) {
-                System.out.println("Ciclo " + ciclo + ": " + mensaje);
-            }
+            // 3. Procesos de prueba (en la Fase 2 se crearán desde un formulario)
+            //               nombre, computador, tipo, prioridad, memoria, deadline, instrucciones
+            c1.getKernel().submitProcess(new PCB("Editor", 1, ProcessType.CPU_BOUND, 3, 400, 60, 8), 0);
+            c1.getKernel().submitProcess(new PCB("Navegador", 1, ProcessType.CPU_BOUND, 1, 500, 60, 6), 0);
+            c1.getKernel().submitProcess(new PCB("Juego", 1, ProcessType.CPU_BOUND, 2, 300, 60, 5), 0);
+            c2.getKernel().submitProcess(new PCB("Compilador", 2, ProcessType.CPU_BOUND, 1, 700, 40, 10), 0);
+            c2.getKernel().submitProcess(new PCB("Música", 2, ProcessType.CPU_BOUND, 2, 200, 4, 10), 0);
         });
-
-        // Registrar los eventos del computador 2.
-        computador2.addEventListener(new SystemEventListener() {
-            @Override
-            public void onEvent(long ciclo, String mensaje) {
-                System.out.println("Ciclo " + ciclo + ": " + mensaje);
-            }
-        });
-
-        // Crear dos procesos de prueba.
-        final PCB proceso1 = new PCB(
-            "Proceso 1", 1, ProcessType.CPU_BOUND,
-            1, 300, 20, 5
-        );
-
-        final PCB proceso2 = new PCB(
-            "Proceso 2", 1, ProcessType.CPU_BOUND,
-            1, 200, 20, 3
-        );
-
-        // Enviar ambos procesos al Kernel.
-        computador1.getKernel().submitProcess(
-            proceso1, reloj.getCycle()
-        );
-
-        computador1.getKernel().submitProcess(
-            proceso2, reloj.getCycle()
-        );
-
-        System.out.println("Comienzo de la prueba Round Robin");
-        System.out.println("Quantum: 2 ciclos");
-        System.out.println(proceso1.getTag()
-            + " - Instrucciones: "
-            + proceso1.getRemainingInstructions());
-        System.out.println(proceso2.getTag()
-            + " - Instrucciones: "
-            + proceso2.getRemainingInstructions());
-
-        // Iniciar el reloj.
-        reloj.startClock();
-
-        // Detener la prueba después de 4 segundos.
-        Thread hiloPrueba = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(8000);
-                    reloj.stopClock();
-
-                    System.out.println();
-                    System.out.println("RESULTADO PROCESO 1");
-                    System.out.println("Estado: "
-                        + proceso1.getState().getLabel());
-                    System.out.println("Causa: "
-                        + proceso1.getTerminationCause());
-                    System.out.println("PC: "
-                        + proceso1.getProgramCounter());
-                    System.out.println("Instrucciones restantes: "
-                        + proceso1.getRemainingInstructions());
-                    System.out.println("Ciclos ejecutados: "
-                        + proceso1.getCyclesOnCpu());
-
-                    System.out.println();
-                    System.out.println("RESULTADO PROCESO 2");
-                    System.out.println("Estado: "
-                        + proceso2.getState().getLabel());
-                    System.out.println("Causa: "
-                        + proceso2.getTerminationCause());
-                    System.out.println("PC: "
-                        + proceso2.getProgramCounter());
-                    System.out.println("Instrucciones restantes: "
-                        + proceso2.getRemainingInstructions());
-                    System.out.println("Ciclos ejecutados: "
-                        + proceso2.getCyclesOnCpu());
-
-                    System.out.println();
-                    computador1.mostrarEstado();
-
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        });
-
-        hiloPrueba.start();
     }
 }
