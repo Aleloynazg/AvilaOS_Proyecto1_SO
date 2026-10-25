@@ -113,7 +113,7 @@ public void onTick(long ciclo) {
         procesoActual = null;
     }
 
-    // 2. Revisar si la política exige ceder la CPU.
+// 2. Revisar si la política exige ceder la CPU.
     if (procesoActual != null
             && policy.shouldPreempt(
                 procesoActual,
@@ -121,12 +121,32 @@ public void onTick(long ciclo) {
                 cyclesCPU)) {
 
         cpu.releaseProcess();
-        // El proceso no terminó: vuelve a estar listo.
+
         procesoActual.setState(
             avilaos.kernel.process.ProcessState.READY
         );
 
-        kernel.getReadyQueue().enqueue(procesoActual);
+        if (policy instanceof avilaos.kernel.scheduler.EDFPolicy) {
+            kernel.getReadyQueue().insertSorted(
+                procesoActual,
+                new avilaos.structures.ItemComparator<PCB>() {
+                    @Override
+                    public int compare(PCB a, PCB b) {
+                        if (a.getDeadline() < b.getDeadline()) {
+                            return -1;
+                        }
+
+                        if (a.getDeadline() > b.getDeadline()) {
+                            return 1;
+                        }
+
+                        return 0;
+                    }
+                }
+            );
+        } else {
+            kernel.getReadyQueue().enqueue(procesoActual);
+        }
 
         cyclesCPU = 0;
         procesoActual = null;
