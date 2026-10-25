@@ -116,19 +116,62 @@ public class ComputerPanel extends JPanel {
 
         // Colas
         fill(newModel, kernel.getNewQueue());
-        fill(readyModel, kernel.getReadyQueue());
+        fillReadyQueue(kernel.getReadyQueue());
         fill(blockedModel, kernel.getBlockedQueue());
         fill(terminatedModel, kernel.getTerminatedQueue());
     }
-
-    /** Copia el contenido de una cola del Kernel a la lista que se ve. */
     private void fill(DefaultListModel<String> model, LinkedQueue<PCB> queue) {
         Object[] processes = queue.toArray();
         model.clear();
+
         for (Object o : processes) {
             model.addElement(describe((PCB) o));
         }
     }
+    /** Copia el contenido de una cola del Kernel a la lista que se ve. */
+    private void fillReadyQueue(LinkedQueue<PCB> queue) {
+     Object[] processes = queue.toArray();
+     PCB[] readyProcesses = new PCB[processes.length];
+
+     for (int i = 0; i < processes.length; i++) {
+         readyProcesses[i] = (PCB) processes[i];
+     }
+
+     SchedulingPolicyType type = computer.getPolicy().getType();
+
+     // Ordenamiento manual de una copia de la cola.
+     for (int i = 0; i < readyProcesses.length - 1; i++) {
+         int posicionMenor = i;
+
+         for (int j = i + 1; j < readyProcesses.length; j++) {
+             boolean debeCambiar = false;
+
+             if (type == SchedulingPolicyType.EDF) {
+                 debeCambiar = readyProcesses[j].getDeadline()
+                         < readyProcesses[posicionMenor].getDeadline();
+             } else if (type == SchedulingPolicyType.PRIORITY_PREEMPTIVE) {
+                 debeCambiar = readyProcesses[j].getPriority()
+                         < readyProcesses[posicionMenor].getPriority();
+             }
+
+             if (debeCambiar) {
+                 posicionMenor = j;
+             }
+         }
+
+         if (posicionMenor != i) {
+             PCB temporal = readyProcesses[i];
+             readyProcesses[i] = readyProcesses[posicionMenor];
+             readyProcesses[posicionMenor] = temporal;
+         }
+     }
+
+     readyModel.clear();
+
+     for (int i = 0; i < readyProcesses.length; i++) {
+         readyModel.addElement(describe(readyProcesses[i]));
+     }
+ }
 
     /** Texto corto de un proceso en una cola. */
     private String describe(PCB p) {
@@ -165,13 +208,13 @@ public class ComputerPanel extends JPanel {
             case FCFS:
                 return new FCFSPolicy();
             case ROUND_ROBIN:
-                return new RoundRobinPolicy(4);   // quantum por defecto de DECISIONES.md
+                return new RoundRobinPolicy(4); // Quantum por defecto
             case EDF:
                 return new EDFPolicy();
             case PRIORITY_PREEMPTIVE:
                 return new PriorityPolicy();
             default:
-                return null;                      // Prioridades: Fase 2
+                return null;
         }
     }
 }
