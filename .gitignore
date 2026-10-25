@@ -12,6 +12,8 @@
 
 # Package Files #
 *.jar
+!lib/gson-2.14.0.jar
+!lib/jfreechart-1.5.6.jar
 *.war
 *.nar
 *.ear
