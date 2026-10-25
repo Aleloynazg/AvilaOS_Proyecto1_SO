@@ -7,6 +7,7 @@ import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessType;
 import javax.swing.SwingUtilities;
 import avilaos.kernel.process.ProcessFactory;
+import avilaos.kernel.scheduler.PriorityPolicy;
 
 /** Punto de entrada: arma el sistema y abre la ventana. */
 public class AvilaOS {
@@ -16,6 +17,7 @@ public class AvilaOS {
         Computer c1 = new Computer(1, 1000);
         Computer c2 = new Computer(2, 1000);
         Computer[] computers = {c1, c2};
+        c1.setPolicy(new PriorityPolicy());
 
         GlobalClock clock = new GlobalClock(500);
         c1.conectarReloj(clock);
@@ -28,7 +30,8 @@ public class AvilaOS {
 
             // 3. Procesos de prueba (en la Fase 2 se crearán desde un formulario)
             //               nombre, computador, tipo, prioridad, memoria, deadline, instrucciones
-            c1.getKernel().submitProcess(
+
+             c1.getKernel().submitProcess(
                
             ProcessFactory.ioBound("Editor", 1, 1, 200, 60, 8, 3, 4),
                 0
@@ -42,6 +45,7 @@ public class AvilaOS {
             c1.getKernel().submitProcess(new PCB("Juego", 1, ProcessType.CPU_BOUND, 2, 300, 60, 5), 0);
             c2.getKernel().submitProcess(new PCB("Compilador", 2, ProcessType.CPU_BOUND, 1, 700, 40, 10), 0);
             c2.getKernel().submitProcess(new PCB("Música", 2, ProcessType.CPU_BOUND, 2, 200, 4, 10), 0);
+            
         });
     }
 }

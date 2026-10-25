@@ -81,11 +81,14 @@ public class MainWindow extends JFrame {
     }
 
     private void refresh() {
-        cycleLabel.setText("Ciclo: " + clock.getCycle());
+        long cicloActual = clock.getCycle();
+
+        cycleLabel.setText("Ciclo: " + cicloActual);
+
         for (ComputerPanel panel : panels) {
             panel.refresh();
         }
-    }
+    }   
 
     /** Los eventos llegan desde el hilo del reloj: se pasan al hilo de Swing. */
     private void appendLog(long cycle, String message) {
