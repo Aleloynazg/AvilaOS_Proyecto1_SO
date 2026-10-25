@@ -29,10 +29,16 @@ public class AvilaOS {
             // 3. Procesos de prueba (en la Fase 2 se crearán desde un formulario)
             //               nombre, computador, tipo, prioridad, memoria, deadline, instrucciones
             c1.getKernel().submitProcess(
-                ProcessFactory.ioBound("Editor", 1, 3, 400, 60, 8, 3, 2),
+               
+            ProcessFactory.ioBound("Editor", 1, 1, 200, 60, 8, 3, 4),
                 0
             );
-            c1.getKernel().submitProcess(new PCB("Navegador", 1, ProcessType.CPU_BOUND, 1, 500, 60, 6), 0);
+            
+
+            c1.getKernel().submitProcess(
+                new PCB("Navegador", 1, ProcessType.CPU_BOUND, 3, 500, 60, 6),
+                0
+            );
             c1.getKernel().submitProcess(new PCB("Juego", 1, ProcessType.CPU_BOUND, 2, 300, 60, 5), 0);
             c2.getKernel().submitProcess(new PCB("Compilador", 2, ProcessType.CPU_BOUND, 1, 700, 40, 10), 0);
             c2.getKernel().submitProcess(new PCB("Música", 2, ProcessType.CPU_BOUND, 2, 200, 4, 10), 0);
