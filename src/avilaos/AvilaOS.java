@@ -6,6 +6,7 @@ import avilaos.hardware.GlobalClock;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessType;
 import javax.swing.SwingUtilities;
+import avilaos.kernel.process.ProcessFactory;
 
 /** Punto de entrada: arma el sistema y abre la ventana. */
 public class AvilaOS {
@@ -27,7 +28,10 @@ public class AvilaOS {
 
             // 3. Procesos de prueba (en la Fase 2 se crearán desde un formulario)
             //               nombre, computador, tipo, prioridad, memoria, deadline, instrucciones
-            c1.getKernel().submitProcess(new PCB("Editor", 1, ProcessType.CPU_BOUND, 3, 400, 60, 8), 0);
+            c1.getKernel().submitProcess(
+                ProcessFactory.ioBound("Editor", 1, 3, 400, 60, 8, 3, 2),
+                0
+            );
             c1.getKernel().submitProcess(new PCB("Navegador", 1, ProcessType.CPU_BOUND, 1, 500, 60, 6), 0);
             c1.getKernel().submitProcess(new PCB("Juego", 1, ProcessType.CPU_BOUND, 2, 300, 60, 5), 0);
             c2.getKernel().submitProcess(new PCB("Compilador", 2, ProcessType.CPU_BOUND, 1, 700, 40, 10), 0);

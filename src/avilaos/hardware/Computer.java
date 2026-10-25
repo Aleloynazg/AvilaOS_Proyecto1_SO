@@ -14,6 +14,11 @@ import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.TerminationCause;
 import avilaos.kernel.scheduler.SchedulingPolicy;
 import avilaos.kernel.scheduler.FCFSPolicy;
+import avilaos.kernel.process.BlockReason;
+import avilaos.kernel.process.Instruction;
+import avilaos.kernel.process.InstructionModel;
+import avilaos.kernel.process.InstructionType;
+import avilaos.kernel.process.ProcessState;
 
 
 
@@ -169,9 +174,34 @@ public void onTick(long ciclo) {
     }
 
     // 4. Ejecutar una instrucción del proceso actual.
-    cpu.setMode(CpuMode.USER);
-    cpu.onTick(ciclo);
-    cyclesCPU++;
+     procesoActual = cpu.getCurrentProcess();
+
+    if (procesoActual != null) {
+        Instruction instruccion = InstructionModel.next(procesoActual);
+
+        // Si solicita E/S, bloquear el proceso.
+        if (instruccion.getType() == InstructionType.IO_REQUEST) {
+            procesoActual.advance();
+            cpu.setMode(CpuMode.KERNEL);
+            cpu.releaseProcess();
+
+            kernel.blockProcess(
+                procesoActual,
+                BlockReason.IO,
+                procesoActual.getIoDurationCycles(),
+                ciclo
+            );
+
+            cyclesCPU = 0;
+            return;
+        }
+
+        // Si no solicita E/S, ejecutar normalmente.
+        cpu.setMode(CpuMode.USER);
+        cpu.onTick(ciclo);
+        cyclesCPU++;
+    }
+    
 
     // 5. Comprobar si el proceso terminó.
     procesoActual = cpu.getCurrentProcess();
