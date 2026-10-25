@@ -45,3 +45,30 @@ public class AvilaOS {
         });
     }
 }
+
+/*
+c1.getKernel().submitProcess(
+               
+            ProcessFactory.ioBound("Editor", 1, 1, 200, 40, 8, 3, 4),
+                0
+            );
+            
+
+            c1.getKernel().submitProcess(
+                new PCB("Navegador", 1, ProcessType.CPU_BOUND, 3, 500, 30, 6),
+                0
+            );
+            c1.getKernel().submitProcess(new PCB("Juego", 1, ProcessType.CPU_BOUND, 2, 300, 60, 5), 0);
+        c2.getKernel().submitProcess(
+               
+            ProcessFactory.ioBound("Editor", 1, 1, 200, 60, 8, 3, 4),
+                0
+            );
+            
+
+            c2.getKernel().submitProcess(
+                new PCB("Navegador", 1, ProcessType.CPU_BOUND, 3, 500, 60, 6),
+                0
+            );
+            c2.getKernel().submitProcess(new PCB("Juego", 1, ProcessType.CPU_BOUND, 2, 300, 60, 5), 0);
+*/
