@@ -4,6 +4,7 @@ import avilaos.hardware.CPU;
 import avilaos.hardware.Computer;
 import avilaos.kernel.Kernel;
 import avilaos.kernel.memory.MemoryManager;
+import avilaos.kernel.scheduler.PriorityPolicy;
 import avilaos.kernel.process.BlockReason;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.scheduler.EDFPolicy;
@@ -167,6 +168,8 @@ public class ComputerPanel extends JPanel {
                 return new RoundRobinPolicy(4);   // quantum por defecto de DECISIONES.md
             case EDF:
                 return new EDFPolicy();
+            case PRIORITY_PREEMPTIVE:
+                return new PriorityPolicy();
             default:
                 return null;                      // Prioridades: Fase 2
         }
