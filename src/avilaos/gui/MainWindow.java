@@ -17,6 +17,7 @@ import javax.swing.JTextArea;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.JOptionPane;
 
 /**
  * Ventana principal de ÁvilaOS. Observa el sistema; no tiene lógica del SO.
@@ -30,6 +31,9 @@ public class MainWindow extends JFrame {
     private final JTextArea logArea = new JTextArea(8, 80);
     private final JButton startButton = new JButton("Iniciar");
     private final JButton pauseButton = new JButton("Pausar");
+    private final JButton createProcessButton = new JButton("Crear proceso");
+
+
     private final JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
 
     public MainWindow(GlobalClock clock, Computer[] computers) {
@@ -42,12 +46,15 @@ public class MainWindow extends JFrame {
         top.add(cycleLabel);
         top.add(startButton);
         top.add(pauseButton);
+        top.add(createProcessButton);
         top.add(new JLabel("Duración del ciclo (ms):"));
         top.add(durationSpinner);
         pauseButton.setEnabled(false);
 
         startButton.addActionListener(e -> start());
         pauseButton.addActionListener(e -> pause());
+        createProcessButton.addActionListener(e -> {
+    new CreateProcessDialog(computers, clock).mostrar();});
         durationSpinner.addChangeListener(e -> clock.setCycleDuration((Integer) durationSpinner.getValue()));
 
         // --- Centro: un panel por computador ---
@@ -89,6 +96,7 @@ public class MainWindow extends JFrame {
             panel.refresh();
         }
     }   
+
 
     /** Los eventos llegan desde el hilo del reloj: se pasan al hilo de Swing. */
     private void appendLog(long cycle, String message) {
