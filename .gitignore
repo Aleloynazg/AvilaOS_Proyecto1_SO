@@ -26,3 +26,9 @@ hs_err_pid*
 replay_pid*
 /dist/
 /build/
+
+# macOS
+.DS_Store
+
+# NetBeans: configuración personal de cada computadora
+nbproject/private/
