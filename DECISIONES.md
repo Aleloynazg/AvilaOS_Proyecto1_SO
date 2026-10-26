@@ -4,9 +4,6 @@ Reglas que el enunciado deja abiertas. Se acordaron en la revisión de contratos
 (Fase 0). Para cambiar una: abrir un Issue con la etiqueta `decision`, avisar al
 equipo y actualizar este archivo en el mismo PR.
 
-> **Borrador:** cada punto trae una recomendación. Confirmen o cambien en la
-> llamada y borren esta nota.
-
 ## 1. Procesos
 
 | Tema | Decisión | Por qué |
@@ -41,8 +38,7 @@ equipo y actualizar este archivo en el mismo PR.
 
 - Acceso remoto: **antes** de cada `semWait`, `semSignal`, `append` o `take` sobre un buffer remoto, el proceso se bloquea `latencia` ciclos con motivo `NETWORK`.
 - Las colas de los semáforos son **FIFO**.
-- Un proceso despertado por un `semSignal` remoto entra a una cola `incoming` del kernel de su computador, que la procesa al inicio de su ciclo.
-
+- Un proceso despertado por un `semSignal` remoto pasa a Listos en el Kernel de su propio computador, en ese mismo ciclo (el reloj avisa a los computadores uno tras otro en el mismo hilo, así que no hace falta una cola intermedia).
 ## 4. Planificación
 
 | Política | Regla | Desempate |
