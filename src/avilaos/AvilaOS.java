@@ -30,7 +30,7 @@ public class AvilaOS {
 
             // 3. Procesos de prueba (en la Fase 2 se crearán desde un formulario)
             //               nombre, computador, tipo, prioridad, memoria, deadline, instrucciones
-
+/*
              c1.getKernel().submitProcess(
                
             ProcessFactory.ioBound("Editor", 1, 1, 200, 60, 8, 3, 4),
@@ -45,8 +45,24 @@ public class AvilaOS {
             c1.getKernel().submitProcess(new PCB("Juego", 1, ProcessType.CPU_BOUND, 2, 300, 60, 5), 0);
             c2.getKernel().submitProcess(new PCB("Compilador", 2, ProcessType.CPU_BOUND, 1, 700, 40, 10), 0);
             c2.getKernel().submitProcess(new PCB("Música", 2, ProcessType.CPU_BOUND, 2, 200, 4, 10), 0);
-            
+         */  
+//Prueba para el quantum de round robin
+c1.getKernel().submitProcess(
+    new PCB("Proceso A", 1, ProcessType.CPU_BOUND, 1, 200, 100, 20),
+    0
+);
+
+c1.getKernel().submitProcess(
+    new PCB("Proceso B", 1, ProcessType.CPU_BOUND, 2, 200, 100, 20),
+    0
+);
+
+c1.getKernel().submitProcess(
+    new PCB("Proceso C", 1, ProcessType.CPU_BOUND, 3, 200, 100, 20),
+    0
+);
         });
+            
     }
 }
 

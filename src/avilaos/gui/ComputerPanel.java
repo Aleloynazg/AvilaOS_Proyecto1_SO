@@ -35,6 +35,8 @@ public class ComputerPanel extends JPanel {
 
     // Parte de arriba: política y memoria
     private final JComboBox<SchedulingPolicyType> policySelector = new JComboBox<>(SchedulingPolicyType.values());
+    private final javax.swing.JSpinner quantumSelector =
+        new javax.swing.JSpinner(new javax.swing.SpinnerNumberModel(4, 1, 100, 1));
     private final JProgressBar ramBar = new JProgressBar(0, 100);
 
     // CPU
@@ -53,14 +55,23 @@ public class ComputerPanel extends JPanel {
         setBorder(BorderFactory.createTitledBorder("Computador " + computer.getId()));
 
         // --- Arriba: selector de política + barra de RAM ---
-        JPanel top = new JPanel(new GridLayout(2, 2, 5, 5));
+        JPanel top = new JPanel(new GridLayout(3, 2, 5, 5));
+
         top.add(new JLabel("Política:"));
         top.add(policySelector);
+
+        top.add(new JLabel("Quantum Round Robin:"));
+        top.add(quantumSelector);
+
         top.add(new JLabel("RAM:"));
         ramBar.setStringPainted(true);
         top.add(ramBar);
         policySelector.addActionListener(e -> changePolicy());
-
+        quantumSelector.addChangeListener(e -> {
+            if (computer.getPolicy().getType() == SchedulingPolicyType.ROUND_ROBIN) {
+                computer.setPolicy(new RoundRobinPolicy((int) quantumSelector.getValue()));
+            }
+        });
         // --- Centro: CPU arriba, colas abajo ---
         JPanel cpuPanel = new JPanel(new GridLayout(2, 1));
         cpuPanel.setBorder(BorderFactory.createTitledBorder("CPU"));
@@ -203,18 +214,22 @@ public class ComputerPanel extends JPanel {
         computer.setPolicy(policy);
     }
 
-    private SchedulingPolicy createPolicy(SchedulingPolicyType type) {
-        switch (type) {
-            case FCFS:
-                return new FCFSPolicy();
-            case ROUND_ROBIN:
-                return new RoundRobinPolicy(4); // Quantum por defecto
-            case EDF:
-                return new EDFPolicy();
-            case PRIORITY_PREEMPTIVE:
-                return new PriorityPolicy();
-            default:
-                return null;
-        }
+private SchedulingPolicy createPolicy(SchedulingPolicyType type) {
+    switch (type) {
+        case FCFS:
+            return new FCFSPolicy();
+        case ROUND_ROBIN:
+            int quantum = (int) quantumSelector.getValue();
+            return new RoundRobinPolicy(quantum);
+
+        case EDF:
+            return new EDFPolicy();
+
+        case PRIORITY_PREEMPTIVE:
+            return new PriorityPolicy();
+
+        default:
+            return null;
     }
+}
 }

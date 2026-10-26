@@ -119,13 +119,13 @@ public void onTick(long ciclo) {
     }
 
 // 2. Revisar si la política exige ceder la CPU.
-    if (procesoActual != null
-            && policy.shouldPreempt(
-                procesoActual,
-                kernel.getReadyQueue(),
-                cyclesCPU)) {
+if (procesoActual != null
+        && policy.shouldPreempt(
+            procesoActual,
+            kernel.getReadyQueue(),
+            cyclesCPU)) {
 
-        cpu.releaseProcess();
+    cpu.releaseProcess();
 
         procesoActual.setState(
             avilaos.kernel.process.ProcessState.READY
