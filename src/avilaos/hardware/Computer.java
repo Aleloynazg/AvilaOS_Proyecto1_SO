@@ -230,4 +230,8 @@ if (procesoActual != null
         avilaos.kernel.SystemEventListener listener) {
     kernel.addEventListener(listener);
 }
+    @Override
+public String toString() {
+    return "Computador " + id;
+}
 }
