@@ -117,4 +117,33 @@ public class Cluster {
     public int getBufferCount() {
         return buffers.size();
     }
+    
+    
+    // ---------------- Red ----------------
+
+    public int getNetworkLatency() {
+        lock.acquireUninterruptibly();
+        try {
+            return networkLatency;
+        } finally {
+            lock.release();
+        }
+    }
+
+    public void setNetworkLatency(int latency) {
+        if (latency < 0) {
+            throw new IllegalArgumentException("La latencia de red no puede ser negativa");
+        }
+        lock.acquireUninterruptibly();
+        try {
+            networkLatency = latency;
+        } finally {
+            lock.release();
+        }
+    }
+
+    /** ¿Este proceso accede a este buffer desde otro computador? */
+    public boolean isRemoteAccess(PCB process, Buffer buffer) {
+        return !buffer.isLocalTo(process.getComputerId());
+    }
 }
