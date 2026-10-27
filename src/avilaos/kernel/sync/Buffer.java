@@ -55,7 +55,46 @@ public class Buffer {
         }
         return new Buffer(IdGenerator.nextBufferId(), hostComputerId, capacity);
     }
+    
+     /** append: agrega un elemento. Antes hay que haber pasado semWait(e) y semWait(s). */
+    public void append() {
+        lock.acquireUninterruptibly();
+        try {
+            if (count == capacity) {
+                throw new IllegalStateException(getTag() + " está lleno: falta semWait(e) antes de append");
+            }
+            count++;
+            produced++;
+        } finally {
+            lock.release();
+        }
+    }
+
+    /** take: saca un elemento. Antes hay que haber pasado semWait(n) y semWait(s). */
+    public void take() {
+        lock.acquireUninterruptibly();
+        try {
+            if (count == 0) {
+                throw new IllegalStateException(getTag() + " está vacío: falta semWait(n) antes de take");
+            }
+            count--;
+            consumed++;
+        } finally {
+            lock.release();
+        }
+    }
+
+    /** Devuelve el semáforo que indica una instrucción SEM_WAIT(x) o SEM_SIGNAL(x). */
+    public AvilaSemaphore getSemaphore(BufferSemaphore role) {
+        switch (role) {
+            case MUTEX: return mutex;
+            case FULL:  return full;
+            case EMPTY: return empty;
+            default:    throw new IllegalArgumentException("Semáforo desconocido: " + role);
+        }
+    }
 
     public int getId() { return id; }
     public String getTag() { return "B" + id; }
 }
+
