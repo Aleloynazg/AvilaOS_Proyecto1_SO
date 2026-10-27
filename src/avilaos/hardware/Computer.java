@@ -30,6 +30,8 @@ public class Computer implements ClockListener {
     private final Kernel kernel;
     private SchedulingPolicy policy;
     private int cyclesCPU;
+    private final ComputerMetrics metrics;
+    private boolean instruccionEjecutada;
 
     public Computer(int id, int capacidadRAM) {
         if (id <= 0) {
@@ -47,6 +49,8 @@ public class Computer implements ClockListener {
             });
         this.policy = new FCFSPolicy();
         this.cyclesCPU = 0;
+        this.metrics = new ComputerMetrics(id);
+        this.kernel.setMetrics(this.metrics);
 
     }
 
@@ -99,9 +103,19 @@ public class Computer implements ClockListener {
 
 @Override
 public void onTick(long ciclo) {
+    instruccionEjecutada = false;
+
+    try {
+        procesarCiclo(ciclo);
+    } finally {
+        metrics.registrarCiclo(ciclo, instruccionEjecutada);
+    }
+}
+private void procesarCiclo(long ciclo) {
     kernel.tickTimedBlocks(ciclo);
     kernel.tickDeadlines(ciclo);
     kernel.admitNewProcesses(ciclo);
+    kernel.contarTiempoEsperaReady();
 
     PCB procesoActual = cpu.getCurrentProcess();
 
@@ -210,6 +224,7 @@ if (procesoActual != null
         // Las instrucciones de semáforos y buffers se ejecutan
         // en modo KERNEL, sin liberar el proceso de la CPU.
         if (instruccion.isKernelMode()) {
+            instruccionEjecutada = true;
             cpu.setMode(CpuMode.KERNEL);
 
             procesoActual.advance();
@@ -227,6 +242,7 @@ if (procesoActual != null
             cyclesCPU++;
         } else {
             // Las instrucciones normales se ejecutan en modo USER.
+            instruccionEjecutada = true;
             cpu.setMode(CpuMode.USER);
             cpu.onTick(ciclo);
             cyclesCPU++;
@@ -264,5 +280,8 @@ if (procesoActual != null
     @Override
 public String toString() {
     return "Computador " + id;
+}
+public ComputerMetrics getMetrics() {
+    return metrics;
 }
 }

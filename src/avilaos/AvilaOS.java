@@ -8,6 +8,7 @@ import avilaos.kernel.process.ProcessType;
 import javax.swing.SwingUtilities;
 import avilaos.kernel.process.ProcessFactory;
 import avilaos.kernel.scheduler.PriorityPolicy;
+import avilaos.hardware.ComputerMetrics;
 
 /** Punto de entrada: arma el sistema y abre la ventana. */
 public class AvilaOS {

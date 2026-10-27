@@ -6,6 +6,7 @@ import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessState;
 import avilaos.kernel.process.TerminationCause;
 import avilaos.structures.LinkedQueue;
+import avilaos.hardware.ComputerMetrics; 
 
 /**
  * Núcleo del sistema operativo de UN computador. Maneja las 4 colas de
@@ -16,6 +17,7 @@ public class Kernel {
     
     private final int computerId;
     private final MemoryManager memory;
+    private ComputerMetrics metrics;
 
     private final LinkedQueue<PCB> newQueue = new LinkedQueue<>();
     private final LinkedQueue<PCB> readyQueue = new LinkedQueue<>();
@@ -33,6 +35,9 @@ public class Kernel {
     public void addEventListener(SystemEventListener listener) {
         listeners.enqueue(listener);
     }
+    public void setMetrics(ComputerMetrics metrics) {
+    this.metrics = metrics;
+}
 
     private void log(long cycle, String message) {
         Object[] all = listeners.toArray();
@@ -84,28 +89,62 @@ public class Kernel {
         return admitted;
     }
     
+    public void contarTiempoEsperaReady() {
+    Object[] procesos = readyQueue.toArray();
+
+    for (Object objeto : procesos) {
+        PCB proceso = (PCB) objeto;
+        proceso.incrementCyclesWaitingReady();
+    }
+}
+    
     /**
      * Termina un proceso: lo saca de la cola donde esté, libera su memoria
      * (si la tenía) y revisa si ahora cabe alguno de Nuevos.
      * Si el proceso estaba en la CPU, la persona A lo saca de la CPU antes.
      */
-    public void terminateProcess(PCB process, TerminationCause cause, long cycle) {
-        boolean hadMemory = process.getState() != ProcessState.NEW;
-        newQueue.remove(process);
-        readyQueue.remove(process);
-        blockedQueue.remove(process);
-        if (hadMemory) {
-            memory.free(process.getMemoryRequired());
-        }
-        process.terminate(cause, cycle);
-        terminatedQueue.enqueue(process);
-        if (cause == TerminationCause.DEADLINE_MISSED) {
-            log(cycle, process.getTag() + " termina: se venció su deadline");
-        } else {
-            log(cycle, process.getTag() + " termina correctamente");
-        }
-        admitNewProcesses(cycle);
+ public void terminateProcess(PCB process, TerminationCause cause, long cycle) {
+    boolean hadMemory = process.getState() != ProcessState.NEW;
+
+    newQueue.remove(process);
+    readyQueue.remove(process);
+    blockedQueue.remove(process);
+
+    if (hadMemory) {
+        memory.free(process.getMemoryRequired());
     }
+
+    process.terminate(cause, cycle);
+    terminatedQueue.enqueue(process);
+
+    if (metrics != null) {
+        long tiempoRespuesta = -1;
+
+        if (process.getArrivalCycle() >= 0
+                && process.getFirstRunCycle() >= 0) {
+            tiempoRespuesta = process.getFirstRunCycle()
+                    - process.getArrivalCycle();
+        }
+
+        long tiempoEspera = process.getCyclesWaitingReady();
+
+        metrics.registrarProcesoTerminado(
+                cause == TerminationCause.DEADLINE_MISSED,
+                tiempoRespuesta,
+                tiempoEspera
+        );
+    }
+
+    if (cause == TerminationCause.DEADLINE_MISSED) {
+        log(cycle, process.getTag() + " termina: se venció su deadline");
+    } else {
+        log(cycle, process.getTag() + " termina correctamente");
+    }
+
+    admitNewProcesses(cycle);
+}
+
+
     
     /** Un proceso se bloquea. cycles = cuánto dura (E/S, red); 0 si espera un semáforo. */
     public void blockProcess(PCB process, BlockReason reason, int cycles, long cycle) {
