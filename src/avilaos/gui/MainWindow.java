@@ -1,6 +1,7 @@
 package avilaos.gui;
 
 import avilaos.hardware.Computer;
+import avilaos.hardware.ComputerMetrics;
 import avilaos.hardware.GlobalClock;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -26,12 +27,14 @@ public class MainWindow extends JFrame {
 
     private final GlobalClock clock;
     private final ComputerPanel[] panels;
+    private final Computer [] computers; 
 
     private final JLabel cycleLabel = new JLabel("Ciclo: 0");
     private final JTextArea logArea = new JTextArea(8, 80);
     private final JButton startButton = new JButton("Iniciar");
     private final JButton pauseButton = new JButton("Pausar");
     private final JButton createProcessButton = new JButton("Crear proceso");
+    private final JButton metricsButton = new JButton("Ver métricas");
 
 
     private final JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
@@ -39,6 +42,7 @@ public class MainWindow extends JFrame {
     public MainWindow(GlobalClock clock, Computer[] computers) {
         super("ÁvilaOS – Simulador de sistema operativo distribuido");
         this.clock = clock;
+        this.computers = computers; 
 
         // --- Arriba: controles globales ---
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
@@ -47,12 +51,14 @@ public class MainWindow extends JFrame {
         top.add(startButton);
         top.add(pauseButton);
         top.add(createProcessButton);
+        top.add(metricsButton);
         top.add(new JLabel("Duración del ciclo (ms):"));
         top.add(durationSpinner);
         pauseButton.setEnabled(false);
 
         startButton.addActionListener(e -> start());
         pauseButton.addActionListener(e -> pause());
+        metricsButton.addActionListener(e -> mostrarMetricas());
         createProcessButton.addActionListener(e -> {
     new CreateProcessDialog(computers, clock).mostrar();});
         durationSpinner.addChangeListener(e -> clock.setCycleDuration((Integer) durationSpinner.getValue()));
@@ -128,4 +134,51 @@ public class MainWindow extends JFrame {
         startButton.setEnabled(true);
         pauseButton.setEnabled(false);
     }
+private void mostrarMetricas() {
+    String reporte = "";
+
+    for (int i = 0; i < computers.length; i++) {
+        ComputerMetrics metricas = computers[i].getMetrics();
+
+        reporte += "COMPUTADOR  "
+                + metricas.getComputerId() + " \n";
+
+        reporte += "Procesos terminados: "
+                + metricas.getProcesosTerminados() + "\n";
+
+        reporte += "Deadlines incumplidos: "
+                + metricas.getDeadlinesIncumplidos() + "\n";
+
+        reporte += "Ciclos de CPU ocupada: "
+                + metricas.getCiclosCPUOcupada() + "\n";
+
+        reporte += "Ciclos totales: "
+                + metricas.getCiclosTotales() + "\n";
+
+        reporte += "Uso de CPU: "
+                + String.format("%.2f",
+                        metricas.getPorcentajeUsoCPU()) + "%\n";
+
+        reporte += "Tiempo promedio de respuesta: "
+                + metricas.getPromedioTiempoRespuesta() + "\n";
+
+        reporte += "Tiempo promedio en cola READY: "
+                + metricas.getPromedioTiempoEspera() + "\n";
+
+        reporte += "Índice de equidad de Jain: "
+                + String.format("%.4f",
+                        metricas.getIndiceEquidadJain()) + "\n\n";
+    }
+
+    JTextArea area = new JTextArea(reporte, 20, 40);
+    area.setEditable(false);
+
+    JOptionPane.showMessageDialog(
+            this,
+            new JScrollPane(area),
+            "Métricas de ÁvilaOS",
+            JOptionPane.INFORMATION_MESSAGE
+    );
+}
+
 }
