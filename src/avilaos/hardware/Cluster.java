@@ -78,4 +78,43 @@ public class Cluster {
             computers[i].conectarReloj(clock);
         }
     }
+    
+    // ---------------- Buffers ----------------
+
+    /**
+     * Crea un buffer en el computador anfitrión y lo registra en el clúster.
+     * Devuelve null si el anfitrión no tiene RAM libre suficiente.
+     */
+    public Buffer createBuffer(int capacity, int hostComputerId) {
+        Computer host = getComputer(hostComputerId);
+        if (host == null) {
+            throw new IllegalArgumentException("No existe el computador H" + hostComputerId);
+        }
+        Buffer buffer = Buffer.create(capacity, hostComputerId, host.getMemoryManager());
+        if (buffer != null) {
+            buffers.enqueue(buffer);
+        }
+        return buffer;
+    }
+
+    /** Devuelve el buffer con ese id, o null si no existe. */
+    public Buffer getBuffer(int id) {
+        Object[] lista = buffers.toArray();
+        for (int i = 0; i < lista.length; i++) {
+            Buffer b = (Buffer) lista[i];
+            if (b.getId() == id) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    /** Todos los buffers, en orden de creación (para la GUI). */
+    public Object[] getBuffers() {
+        return buffers.toArray();
+    }
+
+    public int getBufferCount() {
+        return buffers.size();
+    }
 }
