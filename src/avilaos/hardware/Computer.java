@@ -124,7 +124,12 @@ if (procesoActual != null
             procesoActual,
             kernel.getReadyQueue(),
             cyclesCPU)) {
-
+        kernel.reportEvent(
+        ciclo,
+        "Expulsando " + procesoActual.getTag()
+        + " de la CPU por la política "
+        + policy.getClass().getSimpleName()
+    );
     cpu.releaseProcess();
 
         procesoActual.setState(
@@ -166,6 +171,12 @@ if (procesoActual != null
 
             if (cpu.assignProcess(siguiente)) {
                 cyclesCPU = 0;
+                kernel.reportEvent(
+                ciclo,
+                "Seleccionando " + siguiente.getTag()
+                + " para ejecutar en la CPU mediante "
+                + policy.getClass().getSimpleName()
+            );
             }
         } else {
             cpu.setMode(CpuMode.KERNEL);
@@ -174,7 +185,7 @@ if (procesoActual != null
     }
 
     // 4. Ejecutar una instrucción del proceso actual.
-     procesoActual = cpu.getCurrentProcess();
+    procesoActual = cpu.getCurrentProcess();
 
     if (procesoActual != null) {
         Instruction instruccion = InstructionModel.next(procesoActual);
@@ -196,10 +207,30 @@ if (procesoActual != null
             return;
         }
 
-        // Si no solicita E/S, ejecutar normalmente.
-        cpu.setMode(CpuMode.USER);
-        cpu.onTick(ciclo);
-        cyclesCPU++;
+        // Las instrucciones de semáforos y buffers se ejecutan
+        // en modo KERNEL, sin liberar el proceso de la CPU.
+        if (instruccion.isKernelMode()) {
+            cpu.setMode(CpuMode.KERNEL);
+
+            procesoActual.advance();
+            procesoActual.incrementCyclesOnCpu();
+            procesoActual.markFirstRun(ciclo);
+
+            kernel.reportEvent(
+            ciclo,
+            "Modo KERNEL: " + procesoActual.getTag()
+            + " ejecuta " + instruccion
+            + " | PC: " + procesoActual.getProgramCounter()
+        );
+
+            cpu.setMode(CpuMode.USER);
+            cyclesCPU++;
+        } else {
+            // Las instrucciones normales se ejecutan en modo USER.
+            cpu.setMode(CpuMode.USER);
+            cpu.onTick(ciclo);
+            cyclesCPU++;
+        }
     }
     
 

@@ -61,10 +61,24 @@ c1.getKernel().submitProcess(
     new PCB("Proceso C", 1, ProcessType.CPU_BOUND, 3, 200, 100, 20),
     0
 );
+c1.getKernel().submitProcess(
+    ProcessFactory.producer(
+        "ProductorPrueba",
+        1,      // Computador
+        1,      // Prioridad
+        100,    // Memoria
+        100,    // Deadline
+        1,      // ID del buffer
+        2,      // Ciclos por elemento
+        2       // Elementos por producir
+    ),
+    0
+);
         });
             
     }
 }
+
 
 /*
 c1.getKernel().submitProcess(
