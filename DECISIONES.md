@@ -36,7 +36,7 @@ equipo y actualizar este archivo en el mismo PR.
 | `SEM_MUTEX` (s) | Otro proceso está en la región crítica | El que estaba dentro hace `semSignal(s)` |
 | `NETWORK` | Acceso a un buffer de otro computador | Pasan `latencia` ciclos |
 
-- Acceso remoto: **antes** de cada `semWait`, `semSignal`, `append` o `take` sobre un buffer remoto, el proceso se bloquea `latencia` ciclos con motivo `NETWORK`.
+- Acceso remoto: **después** de cada `semWait`, `semSignal`, `append` o `take` sobre un buffer remoto, el proceso se bloquea `latencia` ciclos con motivo `NETWORK` (espera la respuesta de la red). No se bloquea si la latencia es 0, si ya quedó esperando en el semáforo o si era su última instrucción. Cada acceso remoto se anota en el log.
 - Las colas de los semáforos son **FIFO**.
 - Un proceso despertado por un `semSignal` remoto pasa a Listos en el Kernel de su propio computador, en ese mismo ciclo (el reloj avisa a los computadores uno tras otro en el mismo hilo, así que no hace falta una cola intermedia).
 ## 4. Planificación

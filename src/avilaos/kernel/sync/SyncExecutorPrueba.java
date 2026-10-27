@@ -17,7 +17,7 @@ public class SyncExecutorPrueba {
 
     public static void main(String[] args) {
         IdGenerator.reset();
-        Cluster cluster = new Cluster(new int[] {1000, 1000}, 3);
+        Cluster cluster = new Cluster(new int[] {1000, 1000}, 0);   // sin latencia: aquí solo probamos semáforos
         cluster.getComputer(1).addEventListener((c, m) -> System.out.println("  [" + c + "] " + m));
         cluster.getComputer(2).addEventListener((c, m) -> System.out.println("  [" + c + "] " + m));
         executor = new SyncExecutor(cluster);

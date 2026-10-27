@@ -4,6 +4,7 @@ import avilaos.hardware.Cluster;
 import avilaos.hardware.Computer;
 import avilaos.kernel.Kernel;
 import avilaos.kernel.SemaphoreWaitCanceller;
+import avilaos.kernel.process.BlockReason;
 import avilaos.kernel.process.Instruction;
 import avilaos.kernel.process.PCB;
 
@@ -45,25 +46,56 @@ public class SyncExecutor implements SemaphoreWaitCanceller {
         }
         Kernel ownKernel = cluster.getKernelOf(process);
 
+        boolean blockedOnSemaphore;
         switch (instruction.getType()) {
             case SEM_WAIT:
-                return semWait(process, buffer, buffer.getSemaphore(instruction.getSemaphore()), ownKernel, cycle);
+                blockedOnSemaphore = semWait(process, buffer,
+                        buffer.getSemaphore(instruction.getSemaphore()), ownKernel, cycle);
+                break;
             case SEM_SIGNAL:
                 semSignal(process, buffer, buffer.getSemaphore(instruction.getSemaphore()), ownKernel, cycle);
-                return false;
+                blockedOnSemaphore = false;
+                break;
             case APPEND:
                 buffer.append();
                 ownKernel.reportEvent(cycle, process.getTag() + " agrega un elemento a "
                         + buffer.getTag() + " [" + buffer.getCount() + "/" + buffer.getCapacity() + "]");
-                return false;
+                blockedOnSemaphore = false;
+                break;
             case TAKE:
                 buffer.take();
                 ownKernel.reportEvent(cycle, process.getTag() + " saca un elemento de "
                         + buffer.getTag() + " [" + buffer.getCount() + "/" + buffer.getCapacity() + "]");
-                return false;
+                blockedOnSemaphore = false;
+                break;
             default:
                 throw new IllegalArgumentException("Instrucción no soportada: " + instruction);
         }
+
+        if (blockedOnSemaphore) {
+            return true;   // ya espera en el semáforo: no se suma la latencia
+        }
+        return payNetworkLatency(process, buffer, ownKernel, cycle);
+    }
+    
+    /**
+     * F3.6: si el buffer vive en otro computador, el acceso fue remoto y el proceso
+     * espera la respuesta de la red: se bloquea "latencia" ciclos con motivo NETWORK.
+     * Devuelve true si lo bloqueó.
+     */
+    private boolean payNetworkLatency(PCB process, Buffer buffer, Kernel ownKernel, long cycle) {
+        if (!cluster.isRemoteAccess(process, buffer)) {
+            return false;
+        }
+        int latency = cluster.getNetworkLatency();
+        ownKernel.reportEvent(cycle, process.getTag() + " accede al buffer " + buffer.getTag()
+                + " de forma remota (H" + buffer.getHostComputerId() + ")");
+        // Sin latencia, o si era su última instrucción, no hay nada que esperar.
+        if (latency == 0 || process.isFinished()) {
+            return false;
+        }
+        ownKernel.blockProcess(process, BlockReason.NETWORK, latency, cycle);
+        return true;
     }
 
     private boolean semWait(PCB process, Buffer buffer, AvilaSemaphore sem, Kernel ownKernel, long cycle) {
