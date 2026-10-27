@@ -94,7 +94,36 @@ public class Buffer {
         }
     }
 
-    public int getId() { return id; }
+       public int getId() { return id; }
     public String getTag() { return "B" + id; }
+    public int getHostComputerId() { return hostComputerId; }
+    public int getCapacity() { return capacity; }
+    public int getMemorySize() { return capacity * MB_PER_SLOT; }
+    public boolean isLocalTo(int computerId) { return hostComputerId == computerId; }
+
+    public AvilaSemaphore getMutex() { return mutex; }
+    public AvilaSemaphore getFull() { return full; }
+    public AvilaSemaphore getEmpty() { return empty; }
+
+    public int getCount() {
+        lock.acquireUninterruptibly();
+        try { return count; } finally { lock.release(); }
+    }
+
+    public int getProduced() {
+        lock.acquireUninterruptibly();
+        try { return produced; } finally { lock.release(); }
+    }
+
+    public int getConsumed() {
+        lock.acquireUninterruptibly();
+        try { return consumed; } finally { lock.release(); }
+    }
+
+    @Override
+    public String toString() {
+        return getTag() + " (H" + hostComputerId + ") [" + getCount() + "/" + capacity + "] "
+                + "s=" + mutex.getValue() + " n=" + full.getValue() + " e=" + empty.getValue();
+    }
 }
 
