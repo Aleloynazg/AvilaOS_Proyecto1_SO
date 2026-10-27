@@ -135,7 +135,6 @@ public class CPU implements ClockListener {
         semaforo.acquireUninterruptibly();
 
         try {
-            registrarEvento(cycle, "recibió el ciclo " + cycle);
 
             if (mode != CpuMode.USER || currentProcess == null) {
                 return;
