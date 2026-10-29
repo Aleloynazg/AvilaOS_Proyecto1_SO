@@ -1,5 +1,7 @@
 package avilaos.gui;
 
+import avilaos.config.ConfigStore;
+import avilaos.config.SimulationFactory;
 import avilaos.hardware.Computer;
 import avilaos.hardware.Cluster;
 import avilaos.hardware.ComputerMetrics;
@@ -8,8 +10,12 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
+import java.io.File;
+import java.io.IOException;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -44,7 +50,10 @@ public class MainWindow extends JFrame {
     private final JButton chartsButton = new JButton("Ver gráficas");
 
 
-    private final JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
+    private final JPanel top;
+    private final JButton saveConfigButton = new JButton("Guardar configuración");
+
+    private final JSpinner durationSpinner =new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
 
     public MainWindow(GlobalClock clock, Computer[] computers) {
         super("ÁvilaOS – Simulador de sistema operativo distribuido");
@@ -52,7 +61,8 @@ public class MainWindow extends JFrame {
         this.computers = computers; 
 
         // --- Arriba: controles globales ---
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        top = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        durationSpinner.setValue(clock.getCycleDuration());
         cycleLabel.setFont(cycleLabel.getFont().deriveFont(16f));
         top.add(cycleLabel);
         top.add(startButton);
@@ -110,8 +120,32 @@ public class MainWindow extends JFrame {
         this.cluster = cluster;
         this.bufferPanel = new BufferPanel(cluster);
         add(bufferPanel, BorderLayout.EAST);
+        top.add(saveConfigButton);
+        saveConfigButton.addActionListener(e -> guardarConfiguracion());
         pack();
         setLocationRelativeTo(null);
+    }
+
+    /** Guarda computadores, buffers y procesos actuales para usarlos en otra simulación. */
+    private void guardarConfiguracion() {
+        JFileChooser chooser = new JFileChooser(new File("."));
+        chooser.setFileFilter(new FileNameExtensionFilter("Configuración JSON (*.json)", "json"));
+        chooser.setSelectedFile(new File("configuracion.json"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        File file = chooser.getSelectedFile();
+        if (!file.getName().toLowerCase().endsWith(".json")) {
+            file = new File(file.getPath() + ".json");
+        }
+        try {
+            ConfigStore.save(SimulationFactory.describe(cluster, clock), file);
+            JOptionPane.showMessageDialog(this, "Configuración guardada en:\n" + file.getAbsolutePath(),
+                    "Configuración guardada", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException | IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(this, "No se pudo guardar: " + ex.getMessage(),
+                    "Error al guardar", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void crearBuffer() {
