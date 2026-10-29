@@ -213,6 +213,27 @@ private final int computerId;
         return ciclosTotales;
     }
 
+    // Acumuladores crudos: el SystemMetrics los suma entre computadores.
+    public long getSumaTiemposRespuesta() {
+        return sumaTiemposRespuesta;
+    }
+
+    public long getCantidadTiemposRespuesta() {
+        return cantidadTiemposRespuesta;
+    }
+
+    public long getSumaTiemposEspera() {
+        return sumaTiemposEspera;
+    }
+
+    public long getCantidadTiemposEspera() {
+        return cantidadTiemposEspera;
+    }
+
+    public double getSumaCuadradosTiemposEspera() {
+        return sumaCuadradosTiemposEspera;
+    }
+
     public int getCantidadRegistros() {
         return cantidadRegistros;
     }
