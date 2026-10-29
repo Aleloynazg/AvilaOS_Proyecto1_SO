@@ -241,6 +241,30 @@ private final int computerId;
         return historialUsoCPU[indice];
     }
 
+    /**
+     * Utilización (%) de la CPU en los últimos {@code ventana} ciclos
+     * registrados hasta el registro {@code indice}. Se deduce de los
+     * porcentajes acumulados guardados en el historial.
+     */
+    public double getUsoCPUVentana(int indice, int ventana) {
+        if (indice < 0 || indice >= cantidadRegistros || ventana <= 0) {
+            return -1;
+        }
+
+        long ocupadosHasta = Math.round(
+                historialUsoCPU[indice] * (indice + 1) / 100);
+        int desde = indice - ventana;
+
+        if (desde < 0) {
+            return historialUsoCPU[indice];
+        }
+
+        long ocupadosAntes = Math.round(
+                historialUsoCPU[desde] * (desde + 1) / 100);
+
+        return (double) (ocupadosHasta - ocupadosAntes) / ventana * 100;
+    }
+
     public long getProcesosTerminadosHistorial(int indice) {
         if (indice < 0 || indice >= cantidadRegistros) {
             return -1;
