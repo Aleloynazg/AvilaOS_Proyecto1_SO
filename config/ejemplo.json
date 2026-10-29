@@ -1,0 +1,20 @@
+{
+  "cycleDurationMs": 300,
+  "networkLatency": 3,
+  "computers": [
+    { "ramMb": 1024, "policy": "ROUND_ROBIN", "quantum": 4 },
+    { "ramMb": 1024, "policy": "EDF", "quantum": 4 }
+  ],
+  "buffers": [
+    { "capacity": 3, "host": 1 },
+    { "capacity": 2, "host": 2 }
+  ],
+  "processes": [
+    { "name": "ProdLocalB1", "computer": 1, "type": "PRODUCER", "priority": 2, "memory": 100, "deadline": 300, "buffer": 1, "cyclesPerItem": 2, "items": 6 },
+    { "name": "ConsRemotoB1", "computer": 2, "type": "CONSUMER", "priority": 2, "memory": 100, "deadline": 300, "buffer": 1, "cyclesPerItem": 2, "items": 6 },
+    { "name": "ProdLocalB2", "computer": 2, "type": "PRODUCER", "priority": 3, "memory": 100, "deadline": 300, "buffer": 2, "cyclesPerItem": 3, "items": 4 },
+    { "name": "ConsRemotoB2", "computer": 1, "type": "CONSUMER", "priority": 3, "memory": 100, "deadline": 300, "buffer": 2, "cyclesPerItem": 3, "items": 4 },
+    { "name": "Calculo", "computer": 1, "type": "CPU_BOUND", "priority": 1, "memory": 200, "deadline": 150, "instructions": 30 },
+    { "name": "Editor", "computer": 2, "type": "IO_BOUND", "priority": 4, "memory": 150, "deadline": 200, "instructions": 24, "ioEvery": 6, "ioDuration": 4 }
+  ]
+}
