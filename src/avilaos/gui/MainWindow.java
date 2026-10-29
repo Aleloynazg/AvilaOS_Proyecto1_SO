@@ -35,6 +35,7 @@ public class MainWindow extends JFrame {
     private final JButton pauseButton = new JButton("Pausar");
     private final JButton createProcessButton = new JButton("Crear proceso");
     private final JButton metricsButton = new JButton("Ver métricas");
+    private final JButton chartsButton = new JButton("Ver gráficas");
 
 
     private final JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
@@ -52,6 +53,7 @@ public class MainWindow extends JFrame {
         top.add(pauseButton);
         top.add(createProcessButton);
         top.add(metricsButton);
+        top.add(chartsButton);
         top.add(new JLabel("Duración del ciclo (ms):"));
         top.add(durationSpinner);
         pauseButton.setEnabled(false);
@@ -62,6 +64,7 @@ public class MainWindow extends JFrame {
         createProcessButton.addActionListener(e -> {
     new CreateProcessDialog(computers, clock).mostrar();});
         durationSpinner.addChangeListener(e -> clock.setCycleDuration((Integer) durationSpinner.getValue()));
+        chartsButton.addActionListener(e -> mostrarGraficas());
 
         // --- Centro: un panel por computador ---
         JPanel center = new JPanel(new GridLayout(1, computers.length, 10, 10));
@@ -167,7 +170,15 @@ private void mostrarMetricas() {
 
         reporte += "Índice de equidad de Jain: "
                 + String.format("%.4f",
-                        metricas.getIndiceEquidadJain()) + "\n\n";
+                        metricas.getIndiceEquidadJain()) + "\n";
+        reporte += "Throughput: "
+            + String.format("%.4f", metricas.getThroughput())
+            + " procesos/ciclo\n";
+
+        reporte += "Deadlines cumplidos: "
+            + String.format("%.2f",
+                metricas.getPorcentajeDeadlinesCumplidos())
+        + "%\n\n";
     }
 
     JTextArea area = new JTextArea(reporte, 20, 40);
@@ -179,6 +190,25 @@ private void mostrarMetricas() {
             "Métricas de ÁvilaOS",
             JOptionPane.INFORMATION_MESSAGE
     );
+}
+private void mostrarGraficas() {
+    javax.swing.JFrame ventana =
+            new javax.swing.JFrame("Gráficas de métricas");
+    ventana.setLayout(
+            new java.awt.GridLayout(computers.length, 2, 10, 10));
+    for (int i = 0; i < computers.length; i++) {
+        ComputerMetrics metricas =
+                computers[i].getMetrics();
+
+        ventana.add(
+                new MetricsChartPanel(metricas, true));
+
+        ventana.add(
+                new MetricsChartPanel(metricas, false));
+    }
+    ventana.setSize(1100, 350 * computers.length);
+    ventana.setLocationRelativeTo(this);
+    ventana.setVisible(true);
 }
 
 }
