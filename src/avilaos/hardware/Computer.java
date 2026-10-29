@@ -19,6 +19,8 @@ import avilaos.kernel.process.Instruction;
 import avilaos.kernel.process.InstructionModel;
 import avilaos.kernel.process.InstructionType;
 import avilaos.kernel.process.ProcessState;
+import avilaos.kernel.sync.SyncExecutor;
+import avilaos.kernel.process.InstructionType;
 
 
 
@@ -32,6 +34,7 @@ public class Computer implements ClockListener {
     private int cyclesCPU;
     private final ComputerMetrics metrics;
     private boolean instruccionEjecutada;
+    private SyncExecutor syncExecutor;
 
     public Computer(int id, int capacidadRAM) {
         if (id <= 0) {
@@ -69,6 +72,8 @@ public class Computer implements ClockListener {
     public Kernel getKernel() {
         return kernel;
     }
+    public void setSyncExecutor(SyncExecutor syncExecutor) {
+        this.syncExecutor = syncExecutor;}
 
     public void mostrarEstado() {
         System.out.println("Computador: " + id);
@@ -232,15 +237,42 @@ if (procesoActual != null
             procesoActual.markFirstRun(ciclo);
 
             kernel.reportEvent(
-            ciclo,
-            "Modo KERNEL: " + procesoActual.getTag()
-            + " ejecuta " + instruccion
-            + " | PC: " + procesoActual.getProgramCounter()
-        );
+                ciclo,
+                "Modo KERNEL: " + procesoActual.getTag()
+                + " ejecuta " + instruccion
+                + " | PC: " + procesoActual.getProgramCounter()
+            );
+
+            boolean bloqueado = false;
+
+            if (instruccion.getType() == InstructionType.SEM_WAIT
+                    || instruccion.getType() == InstructionType.SEM_SIGNAL
+                    || instruccion.getType() == InstructionType.APPEND
+                    || instruccion.getType() == InstructionType.TAKE) {
+
+                if (syncExecutor == null) {
+                    throw new IllegalStateException(
+                        "No se ha conectado SyncExecutor al computador H" + id
+                    );
+                }
+
+                bloqueado = syncExecutor.execute(
+                    procesoActual,
+                    instruccion,
+                    ciclo
+                );
+            }
+
+            if (bloqueado) {
+                cpu.releaseProcess();
+                cyclesCPU = 0;
+                return;
+            }
 
             cpu.setMode(CpuMode.USER);
             cyclesCPU++;
-        } else {
+        }
+         else {
             // Las instrucciones normales se ejecutan en modo USER.
             instruccionEjecutada = true;
             cpu.setMode(CpuMode.USER);
