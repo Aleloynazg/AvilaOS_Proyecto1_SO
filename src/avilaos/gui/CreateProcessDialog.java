@@ -1,42 +1,60 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package avilaos.gui;
+
+import avilaos.hardware.Cluster;
 import avilaos.hardware.Computer;
+import avilaos.hardware.GlobalClock;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessFactory;
 import avilaos.kernel.process.ProcessType;
+import avilaos.kernel.sync.Buffer;
 import java.awt.GridLayout;
-import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-import avilaos.hardware.GlobalClock;
+
 /**
- *
+ * Formulario para crear procesos: CPU bound, I/O bound y, si hay clúster,
+ * productores y consumidores.
  * @author alexandraloynaz
  */
 public class CreateProcessDialog {
-    
-private final Computer[] computers;
+
+    private final Computer[] computers;
     private final GlobalClock clock;
+    private final Cluster cluster;   // null = sin buffers (solo CPU bound e I/O bound)
 
     public CreateProcessDialog(Computer[] computers, GlobalClock clock) {
-    this.computers = computers;
-    this.clock = clock;
-}
+        this(computers, clock, null);
+    }
+
+    public CreateProcessDialog(Computer[] computers, GlobalClock clock, Cluster cluster) {
+        this.computers = computers;
+        this.clock = clock;
+        this.cluster = cluster;
+    }
+
     public void mostrar() {
         JTextField nombre = new JTextField();
         JComboBox<Computer> computador = new JComboBox<>(computers);
         JComboBox<ProcessType> tipo = new JComboBox<>(
-            new ProcessType[] {
-                ProcessType.CPU_BOUND,
-                ProcessType.IO_BOUND
-            }
+            cluster == null
+                ? new ProcessType[] { ProcessType.CPU_BOUND, ProcessType.IO_BOUND }
+                : ProcessType.values()
         );
+
+        // Buffers que existen ahora (para productores y consumidores)
+        Object[] buffers = cluster == null ? new Object[0] : cluster.getBuffers();
+        String[] nombresBuffers = new String[buffers.length];
+        for (int i = 0; i < buffers.length; i++) {
+            Buffer b = (Buffer) buffers[i];
+            nombresBuffers[i] = b.getTag() + " (en H" + b.getHostComputerId()
+                    + ", capacidad " + b.getCapacity() + ")";
+        }
+        JComboBox<String> buffer = new JComboBox<>(nombresBuffers);
+        JTextField ciclosPorElemento = new JTextField("2");
+        JTextField elementos = new JTextField("5");
 
         JTextField prioridad = new JTextField("1");
         JTextField memoria = new JTextField("200");
@@ -74,14 +92,29 @@ private final Computer[] computers;
         formulario.add(new JLabel("Duración de E/S (ciclos):"));
         formulario.add(duracionIO);
 
-        tipo.addActionListener(e -> {
-            boolean esIO = tipo.getSelectedItem() == ProcessType.IO_BOUND;
+        formulario.add(new JLabel("Buffer:"));
+        formulario.add(buffer);
+
+        formulario.add(new JLabel("Ciclos por elemento (k):"));
+        formulario.add(ciclosPorElemento);
+
+        formulario.add(new JLabel("Elementos a producir/consumir:"));
+        formulario.add(elementos);
+
+        // Activa solo los campos que usa el tipo elegido
+        Runnable actualizarCampos = () -> {
+            ProcessType t = (ProcessType) tipo.getSelectedItem();
+            boolean esIO = t == ProcessType.IO_BOUND;
+            boolean usaBuffer = t == ProcessType.PRODUCER || t == ProcessType.CONSUMER;
             cadaIO.setEnabled(esIO);
             duracionIO.setEnabled(esIO);
-        });
-
-        cadaIO.setEnabled(false);
-        duracionIO.setEnabled(false);
+            instrucciones.setEnabled(!usaBuffer);   // se calculan solas: elementos x (k + 5)
+            buffer.setEnabled(usaBuffer);
+            ciclosPorElemento.setEnabled(usaBuffer);
+            elementos.setEnabled(usaBuffer);
+        };
+        tipo.addActionListener(e -> actualizarCampos.run());
+        actualizarCampos.run();
 
         while (true) {
             int opcion = JOptionPane.showConfirmDialog(
@@ -116,15 +149,32 @@ private final Computer[] computers;
                 int prioridadValor = leerPositivo(prioridad, "prioridad");
                 int memoriaValor = leerPositivo(memoria, "memoria");
                 int deadlineValor = leerPositivo(deadline, "deadline");
-                int instruccionesValor =
-                    leerPositivo(instrucciones, "instrucciones");
-
                 ProcessType tipoSeleccionado =
                     (ProcessType) tipo.getSelectedItem();
 
                 PCB proceso;
 
-                if (tipoSeleccionado == ProcessType.IO_BOUND) {
+                if (tipoSeleccionado == ProcessType.PRODUCER
+                        || tipoSeleccionado == ProcessType.CONSUMER) {
+                    if (buffers.length == 0) {
+                        throw new IllegalArgumentException(
+                            "Primero crea un buffer con el botón \"Crear buffer\"."
+                        );
+                    }
+                    Buffer elegido = (Buffer) buffers[buffer.getSelectedIndex()];
+                    int k = leerPositivo(ciclosPorElemento, "ciclos por elemento");
+                    int cantidad = leerPositivo(elementos, "elementos");
+
+                    if (tipoSeleccionado == ProcessType.PRODUCER) {
+                        proceso = ProcessFactory.producer(nombreProceso, seleccionado.getId(),
+                            prioridadValor, memoriaValor, deadlineValor, elegido.getId(), k, cantidad);
+                    } else {
+                        proceso = ProcessFactory.consumer(nombreProceso, seleccionado.getId(),
+                            prioridadValor, memoriaValor, deadlineValor, elegido.getId(), k, cantidad);
+                    }
+                } else if (tipoSeleccionado == ProcessType.IO_BOUND) {
+                    int instruccionesValor =
+                        leerPositivo(instrucciones, "instrucciones");
                     int cadaIOValor = leerPositivo(cadaIO, "cada cuántas instrucciones");
                     int duracionIOValor = leerPositivo(duracionIO, "duración de E/S");
 
@@ -139,6 +189,8 @@ private final Computer[] computers;
                         duracionIOValor
                     );
                 } else {
+                    int instruccionesValor =
+                        leerPositivo(instrucciones, "instrucciones");
                     proceso = ProcessFactory.cpuBound(
                         nombreProceso,
                         seleccionado.getId(),
@@ -201,4 +253,3 @@ private final Computer[] computers;
         return valor;
     }
 }
-

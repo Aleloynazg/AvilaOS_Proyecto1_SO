@@ -1,6 +1,7 @@
 package avilaos.gui;
 
 import avilaos.hardware.Computer;
+import avilaos.hardware.Cluster;
 import avilaos.hardware.ComputerMetrics;
 import avilaos.hardware.GlobalClock;
 import java.awt.BorderLayout;
@@ -35,6 +36,11 @@ public class MainWindow extends JFrame {
     private final JButton pauseButton = new JButton("Pausar");
     private final JButton createProcessButton = new JButton("Crear proceso");
     private final JButton metricsButton = new JButton("Ver métricas");
+    private final JButton createBufferButton = new JButton("Crear buffer");
+
+    // Solo existen si la ventana se crea con el clúster (F3.8 y F3.10)
+    private Cluster cluster;
+    private BufferPanel bufferPanel;
     private final JButton chartsButton = new JButton("Ver gráficas");
 
 
@@ -52,6 +58,7 @@ public class MainWindow extends JFrame {
         top.add(startButton);
         top.add(pauseButton);
         top.add(createProcessButton);
+        top.add(createBufferButton);
         top.add(metricsButton);
         top.add(chartsButton);
         top.add(new JLabel("Duración del ciclo (ms):"));
@@ -61,8 +68,9 @@ public class MainWindow extends JFrame {
         startButton.addActionListener(e -> start());
         pauseButton.addActionListener(e -> pause());
         metricsButton.addActionListener(e -> mostrarMetricas());
-        createProcessButton.addActionListener(e -> {
-    new CreateProcessDialog(computers, clock).mostrar();});
+        createProcessButton.addActionListener(e ->
+                new CreateProcessDialog(computers, clock, cluster).mostrar());
+        createBufferButton.addActionListener(e -> crearBuffer());
         durationSpinner.addChangeListener(e -> clock.setCycleDuration((Integer) durationSpinner.getValue()));
         chartsButton.addActionListener(e -> mostrarGraficas());
 
@@ -95,6 +103,26 @@ public class MainWindow extends JFrame {
         Timer refreshTimer = new Timer(200, e -> refresh());
         refreshTimer.start();
     }
+    
+      /** Ventana con buffers: recibe el clúster completo. */
+    public MainWindow(GlobalClock clock, Cluster cluster) {
+        this(clock, cluster.getComputers());
+        this.cluster = cluster;
+        this.bufferPanel = new BufferPanel(cluster);
+        add(bufferPanel, BorderLayout.EAST);
+        pack();
+        setLocationRelativeTo(null);
+    }
+
+    private void crearBuffer() {
+        if (cluster == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Esta ventana se abrió sin clúster: no se pueden crear buffers.",
+                    "Sin clúster", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        new CreateBufferDialog(cluster, clock).mostrar();
+    }
 
     private void refresh() {
         long cicloActual = clock.getCycle();
@@ -103,6 +131,10 @@ public class MainWindow extends JFrame {
 
         for (ComputerPanel panel : panels) {
             panel.refresh();
+        }
+       
+        if (bufferPanel != null) {
+            bufferPanel.refresh();
         }
     }   
 
