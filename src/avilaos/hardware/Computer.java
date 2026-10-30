@@ -5,6 +5,14 @@
 package avilaos.hardware;
 
 /**
+  * Representa un computador dentro del simulador.
+ *
+ * Cada computador administra su propia CPU, memoria RAM, Kernel,
+ * política de planificación y métricas de ejecución.
+ *
+ * Coordina la ejecución de procesos en cada ciclo del reloj global,
+ * incluyendo la planificación, ejecución de instrucciones,
+ * gestión de bloqueos y sincronización.
  *
  * @author alexandraloynaz
  */
@@ -35,7 +43,18 @@ public class Computer implements ClockListener {
     private final ComputerMetrics metrics;
     private boolean instruccionEjecutada;
     private SyncExecutor syncExecutor;
-
+ /**
+     * Construye un computador e inicializa sus componentes.
+     *
+     * Configura la CPU, la memoria RAM, el Kernel, la política FCFS
+     * predeterminada y el sistema de métricas. También conecta los
+     * eventos de la CPU con el Kernel.
+     *
+     * @param id identificador del computador.
+     * @param capacidadRAM capacidad total de memoria RAM.
+     * @throws IllegalArgumentException si el identificador no es positivo.
+     */
+    
     public Computer(int id, int capacidadRAM) {
         if (id <= 0) {
             throw new IllegalArgumentException(
@@ -56,25 +75,52 @@ public class Computer implements ClockListener {
         this.kernel.setMetrics(this.metrics);
 
     }
-
+    /**
+     * Obtiene el identificador del computador.
+     *
+     * @return identificador del computador.
+     */
     public int getId() {
         return id;
     }
-
+    /**
+     * Obtiene la CPU asociada al computador.
+     *
+     * @return instancia de la CPU.
+     */
     public CPU getCPU() {
         return cpu;
     }
-
+    /**
+     * Obtiene el administrador de memoria RAM.
+     *
+     * @return instancia del administrador de memoria.
+     */
     public MemoryManager getMemoryManager() {
         return memory;
     }
-
+    /**
+     * Obtiene el Kernel asociado al computador.
+     *
+     * @return instancia del Kernel.
+     */
     public Kernel getKernel() {
         return kernel;
     }
+        /**
+     * Configura el ejecutor de instrucciones de sincronización.
+     *
+     * @param syncExecutor ejecutor encargado de gestionar semáforos
+     *                     y operaciones sobre buffers.
+     */
     public void setSyncExecutor(SyncExecutor syncExecutor) {
         this.syncExecutor = syncExecutor;}
 
+        /**
+     * Muestra por consola el estado actual del computador,
+     * incluyendo el estado de la CPU, su modo de ejecución
+     * y la memoria RAM utilizada y disponible.
+     */
     public void mostrarEstado() {
         System.out.println("Computador: " + id);
 
@@ -99,61 +145,85 @@ public class Computer implements ClockListener {
             + memory.getFreeMemory()
         );
     }
-
+    /**
+     * Registra este computador como oyente del reloj global.
+     *
+     * @param reloj reloj global que notificará los ciclos de ejecución.
+     */
     public void conectarReloj(GlobalClock reloj) {
         if (reloj != null) {
             reloj.addListener(this);
         }
     }
 
-@Override
-public void onTick(long ciclo) {
-    instruccionEjecutada = false;
+        /**
+     * Recibe la notificación de un nuevo ciclo del reloj global.
+     *
+     * Reinicia el indicador de ejecución, procesa las actividades
+     * correspondientes al ciclo y registra las métricas obtenidas.
+     *
+     * @param ciclo número del ciclo actual.
+     */
+    @Override
+    public void onTick(long ciclo) {
+        instruccionEjecutada = false;
 
-    try {
-        procesarCiclo(ciclo);
-    } finally {
-        metrics.registrarCiclo(ciclo, instruccionEjecutada);
+        try {
+            procesarCiclo(ciclo);
+        } finally {
+            metrics.registrarCiclo(ciclo, instruccionEjecutada);
+        }
     }
-}
-private void procesarCiclo(long ciclo) {
-    kernel.tickTimedBlocks(ciclo);
-    kernel.tickDeadlines(ciclo);
-    kernel.admitNewProcesses(ciclo);
-    kernel.contarTiempoEsperaReady();
+/**
+ * Procesa las actividades del computador durante un ciclo del reloj.
+ *
+ * Actualiza los bloqueos y deadlines, admite nuevos procesos,
+ * aplica la política de planificación y ejecuta una instrucción
+ * del proceso seleccionado.
+ *
+ * También gestiona las solicitudes de E/S, las instrucciones
+ * de sincronización y la finalización de procesos.
+ *
+ * @param ciclo número del ciclo actual del reloj global.
+ */
+    private void procesarCiclo(long ciclo) {
+        kernel.tickTimedBlocks(ciclo);
+        kernel.tickDeadlines(ciclo);
+        kernel.admitNewProcesses(ciclo);
+        kernel.contarTiempoEsperaReady();
 
-    PCB procesoActual = cpu.getCurrentProcess();
+        PCB procesoActual = cpu.getCurrentProcess();
 
-    
-    // 1. Revisar si el proceso que se ejecuta agotó su deadline.
-    if (procesoActual != null && procesoActual.tickDeadline()) {
-        cpu.releaseProcess();
-        cyclesCPU = 0;
-        kernel.terminateProcess(
-            procesoActual,
-            TerminationCause.DEADLINE_MISSED,
-            ciclo);
 
-        procesoActual = null;
-    }
+        // 1. Revisar si el proceso que se ejecuta agotó su deadline.
+        if (procesoActual != null && procesoActual.tickDeadline()) {
+            cpu.releaseProcess();
+            cyclesCPU = 0;
+            kernel.terminateProcess(
+                procesoActual,
+                TerminationCause.DEADLINE_MISSED,
+                ciclo);
 
-// 2. Revisar si la política exige ceder la CPU.
-if (procesoActual != null
-        && policy.shouldPreempt(
-            procesoActual,
-            kernel.getReadyQueue(),
-            cyclesCPU)) {
-        kernel.reportEvent(
-        ciclo,
-        "Expulsando " + procesoActual.getTag()
-        + " de la CPU por la política "
-        + policy.getClass().getSimpleName()
-    );
-    cpu.releaseProcess();
+            procesoActual = null;
+        }
 
-        procesoActual.setState(
-            avilaos.kernel.process.ProcessState.READY
+    // 2. Revisar si la política exige ceder la CPU.
+    if (procesoActual != null
+            && policy.shouldPreempt(
+                procesoActual,
+                kernel.getReadyQueue(),
+                cyclesCPU)) {
+            kernel.reportEvent(
+            ciclo,
+            "Expulsando " + procesoActual.getTag()
+            + " de la CPU por la política "
+            + policy.getClass().getSimpleName()
         );
+        cpu.releaseProcess();
+
+            procesoActual.setState(
+                avilaos.kernel.process.ProcessState.READY
+            );
 
         if (policy instanceof avilaos.kernel.scheduler.EDFPolicy) {
             kernel.getReadyQueue().insertSorted(
@@ -296,24 +366,51 @@ if (procesoActual != null
         );
     }
 }
+        /**
+     * Establece la política de planificación del computador.
+     *
+     * Si la política recibida no es nula, sustituye la política actual.
+     *
+     * @param policy nueva política de planificación.
+     */
     public void setPolicy(SchedulingPolicy policy) {
         if (policy != null) {
             this.policy = policy;
         }
     }
-
+    /**
+     * Obtiene la política de planificación configurada.
+     *
+     * @return política de planificación actual.
+     */
     public SchedulingPolicy getPolicy() {
         return policy;
     }
+        /**
+     * Registra un oyente para recibir los eventos del sistema
+     * generados por el Kernel de este computador.
+     *
+     * @param listener componente que recibirá los eventos.
+     */
     public void addEventListener(
         avilaos.kernel.SystemEventListener listener) {
     kernel.addEventListener(listener);
 }
+        /**
+     * Devuelve una representación del computador.
+     *
+     * @return nombre del computador seguido de su identificador.
+     */
     @Override
-public String toString() {
-    return "Computador " + id;
-}
-public ComputerMetrics getMetrics() {
-    return metrics;
-}
-}
+    public String toString() {
+        return "Computador " + id;
+    }
+        /**
+     * Obtiene las métricas registradas para este computador.
+     *
+     * @return objeto con las métricas de ejecución.
+     */
+    public ComputerMetrics getMetrics() {
+        return metrics;
+    }
+    }
