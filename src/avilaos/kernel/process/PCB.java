@@ -22,6 +22,7 @@ public class PCB {
     private TerminationCause terminationCause = TerminationCause.NONE;
     private final int priority;             // menor número = más prioridad
     private int deadline;                   // ciclos que le quedan antes de ser terminado
+    private final int initialDeadline;      // el que se pidió al crear el proceso (para guardarlo)
 
     // ---- Memoria ----
     private final int memoryRequired;
@@ -58,6 +59,7 @@ public class PCB {
         this.priority = priority;
         this.memoryRequired = memoryRequired;
         this.deadline = deadline;
+        this.initialDeadline = deadline;
         this.totalInstructions = totalInstructions;
         this.remainingInstructions = totalInstructions;
     }
@@ -121,6 +123,7 @@ public class PCB {
     public TerminationCause getTerminationCause() { return terminationCause; }
     public int getPriority() { return priority; }
     public int getDeadline() { return deadline; }
+    public int getInitialDeadline() { return initialDeadline; }
     public int getMemoryRequired() { return memoryRequired; }
     public int getTotalInstructions() { return totalInstructions; }
     public int getRemainingInstructions() { return remainingInstructions; }

@@ -102,6 +102,12 @@ public class ComputerPanel extends JPanel {
         ramBar.setStringPainted(true);
         top.add(ramBar);
 
+        // Mostrar la política y el quantum con que arrancó el computador (por ejemplo, de un JSON)
+        policySelector.setSelectedItem(computer.getPolicy().getType());
+        if (computer.getPolicy() instanceof RoundRobinPolicy) {
+            quantumSelector.setValue(((RoundRobinPolicy) computer.getPolicy()).getQuantum());
+        }
+
         policySelector.addActionListener(e -> changePolicy());
 
         quantumSelector.addChangeListener(e -> {
