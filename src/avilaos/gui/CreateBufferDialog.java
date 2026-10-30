@@ -42,6 +42,10 @@ public class CreateBufferDialog {
             }
             try {
                 int capacidadValor = Integer.parseInt(capacidad.getText().trim());
+                if (capacidadValor < 1 || capacidadValor > 50) {
+                    throw new IllegalArgumentException(
+                            "La capacidad debe estar entre 1 y 50 elementos.");
+                }
                 Computer host = (Computer) anfitrion.getSelectedItem();
 
                 Buffer buffer = cluster.createBuffer(capacidadValor, host.getId());
