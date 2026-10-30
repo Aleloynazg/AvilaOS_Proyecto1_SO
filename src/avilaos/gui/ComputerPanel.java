@@ -50,6 +50,7 @@ public class ComputerPanel extends JPanel {
 
     // CPU
     private final JLabel cpuLabel = new JLabel();
+    private final JLabel cpuDetailLabel = new JLabel(" ");
     private final JLabel modeLabel = new JLabel();
 
     // Modelos de las cuatro colas
@@ -102,6 +103,12 @@ public class ComputerPanel extends JPanel {
         ramBar.setStringPainted(true);
         top.add(ramBar);
 
+        // Mostrar la política y el quantum con que arrancó el computador (por ejemplo, de un JSON)
+        policySelector.setSelectedItem(computer.getPolicy().getType());
+        if (computer.getPolicy() instanceof RoundRobinPolicy) {
+            quantumSelector.setValue(((RoundRobinPolicy) computer.getPolicy()).getQuantum());
+        }
+
         policySelector.addActionListener(e -> changePolicy());
 
         quantumSelector.addChangeListener(e -> {
@@ -113,9 +120,10 @@ public class ComputerPanel extends JPanel {
         });
 
         // Panel de CPU
-        JPanel cpuPanel = new JPanel(new GridLayout(2, 1));
+        JPanel cpuPanel = new JPanel(new GridLayout(3, 1));
         cpuPanel.setBorder(BorderFactory.createTitledBorder("CPU"));
         cpuPanel.add(cpuLabel);
+        cpuPanel.add(cpuDetailLabel);
         cpuPanel.add(modeLabel);
 
         // Configurar selección de las listas
@@ -214,11 +222,13 @@ public class ComputerPanel extends JPanel {
 
         if (running == null) {
             cpuLabel.setText("Proceso: (libre)");
+            cpuDetailLabel.setText(" ");
         } else {
             cpuLabel.setText(
                     "Proceso: " + running.getTag()
-                    + " " + running.getName()
-                    + " | PC: " + running.getProgramCounter()
+                    + " " + running.getName());
+            cpuDetailLabel.setText(
+                    "PC: " + running.getProgramCounter()
                     + " | Prioridad: " + running.getPriority()
                     + " | Deadline: " + running.getDeadline());
         }
@@ -302,22 +312,49 @@ public class ComputerPanel extends JPanel {
         return procesos;
     }
 
+    /**
+     * Texto de un proceso en una cola. Va en varias líneas (HTML) para que
+     * entre en la lista sin cortarse y el motivo de bloqueo siempre se vea.
+     */
     private String describe(PCB p) {
-        String text = p.getTag() + " " + p.getName()
-                + " | prio " + p.getPriority()
-                + " | " + p.getMemoryRequired() + " MB"
+        String text = "<html><b>" + escape(p.getTag() + " " + p.getName()) + "</b>"
+                + "<br>prio " + p.getPriority()
                 + " | dl " + p.getDeadline()
-                + " | resta " + p.getRemainingInstructions();
+                + " | " + p.getMemoryRequired() + " MB"
+                + "<br>resta " + p.getRemainingInstructions() + " instr.";
 
         if (p.getBlockReason() != BlockReason.NONE) {
-            text += " | " + p.getBlockReason().getLabel();
+            text += "<br><font color='#B00020'>"
+                    + shortReason(p.getBlockReason()) + "</font>";
         }
 
         if (p.getFinishCycle() >= 0) {
-            text += " | " + p.getTerminationCause();
+            text += "<br>" + p.getTerminationCause();
         }
 
-        return text;
+        return text + "</html>";
+    }
+
+    /** Motivo corto para las listas; el texto completo está en el PCB. */
+    private String shortReason(BlockReason reason) {
+        switch (reason) {
+            case IO:
+                return "E/S";
+            case SEM_EMPTY:
+                return "sem e: lleno";
+            case SEM_FULL:
+                return "sem n: vacío";
+            case SEM_MUTEX:
+                return "sem s: mutex";
+            case NETWORK:
+                return "red remota";
+            default:
+                return reason.getLabel();
+        }
+    }
+
+    private String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private void seleccionarProceso(PCB proceso) {

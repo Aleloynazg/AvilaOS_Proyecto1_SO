@@ -1,15 +1,23 @@
 package avilaos.gui;
 
+import avilaos.config.ConfigStore;
+import avilaos.config.SimulationFactory;
 import avilaos.hardware.Computer;
 import avilaos.hardware.Cluster;
 import avilaos.hardware.ComputerMetrics;
 import avilaos.hardware.GlobalClock;
+import avilaos.hardware.SystemMetrics;
+import avilaos.kernel.sync.Buffer;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
+import java.io.File;
+import java.io.IOException;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -44,7 +52,10 @@ public class MainWindow extends JFrame {
     private final JButton chartsButton = new JButton("Ver gráficas");
 
 
-    private final JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
+    private final JPanel top;
+    private final JButton saveConfigButton = new JButton("Guardar configuración");
+
+    private final JSpinner durationSpinner =new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
 
     public MainWindow(GlobalClock clock, Computer[] computers) {
         super("ÁvilaOS – Simulador de sistema operativo distribuido");
@@ -52,7 +63,8 @@ public class MainWindow extends JFrame {
         this.computers = computers; 
 
         // --- Arriba: controles globales ---
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        top = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        durationSpinner.setValue(clock.getCycleDuration());
         cycleLabel.setFont(cycleLabel.getFont().deriveFont(16f));
         top.add(cycleLabel);
         top.add(startButton);
@@ -110,8 +122,32 @@ public class MainWindow extends JFrame {
         this.cluster = cluster;
         this.bufferPanel = new BufferPanel(cluster);
         add(bufferPanel, BorderLayout.EAST);
+        top.add(saveConfigButton);
+        saveConfigButton.addActionListener(e -> guardarConfiguracion());
         pack();
         setLocationRelativeTo(null);
+    }
+
+    /** Guarda computadores, buffers y procesos actuales para usarlos en otra simulación. */
+    private void guardarConfiguracion() {
+        JFileChooser chooser = new JFileChooser(new File("."));
+        chooser.setFileFilter(new FileNameExtensionFilter("Configuración JSON (*.json)", "json"));
+        chooser.setSelectedFile(new File("configuracion.json"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        File file = chooser.getSelectedFile();
+        if (!file.getName().toLowerCase().endsWith(".json")) {
+            file = new File(file.getPath() + ".json");
+        }
+        try {
+            ConfigStore.save(SimulationFactory.describe(cluster, clock), file);
+            JOptionPane.showMessageDialog(this, "Configuración guardada en:\n" + file.getAbsolutePath(),
+                    "Configuración guardada", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException | IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(this, "No se pudo guardar: " + ex.getMessage(),
+                    "Error al guardar", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void crearBuffer() {
@@ -213,7 +249,11 @@ private void mostrarMetricas() {
         + "%\n\n";
     }
 
-    JTextArea area = new JTextArea(reporte, 20, 40);
+    if (cluster != null) {
+        reporte += reporteSistema();
+    }
+
+    JTextArea area = new JTextArea(reporte, 24, 44);
     area.setEditable(false);
 
     JOptionPane.showMessageDialog(
@@ -223,22 +263,43 @@ private void mostrarMetricas() {
             JOptionPane.INFORMATION_MESSAGE
     );
 }
-private void mostrarGraficas() {
-    javax.swing.JFrame ventana =
-            new javax.swing.JFrame("Gráficas de métricas");
-    ventana.setLayout(
-            new java.awt.GridLayout(computers.length, 2, 10, 10));
-    for (int i = 0; i < computers.length; i++) {
-        ComputerMetrics metricas =
-                computers[i].getMetrics();
+/** Totales del clúster y métricas de productor-consumidor por buffer. */
+private String reporteSistema() {
+    SystemMetrics sistema = new SystemMetrics(cluster);
+    String reporte = "SISTEMA COMPLETO\n";
 
-        ventana.add(
-                new MetricsChartPanel(metricas, true));
+    reporte += "Procesos terminados: " + sistema.getProcesosTerminados() + "\n";
+    reporte += "Deadlines incumplidos: " + sistema.getDeadlinesIncumplidos() + "\n";
+    reporte += "Throughput: " + String.format("%.4f", sistema.getThroughput())
+            + " procesos/ciclo\n";
+    reporte += "Uso de CPU: " + String.format("%.2f", sistema.getUtilizacionCPU()) + "%\n";
+    reporte += "Tiempo promedio de respuesta: "
+            + String.format("%.2f", sistema.getPromedioTiempoRespuesta()) + "\n";
+    reporte += "Deadlines cumplidos: "
+            + String.format("%.2f", sistema.getPorcentajeDeadlinesCumplidos()) + "%\n";
+    reporte += "Índice de equidad de Jain: "
+            + String.format("%.4f", sistema.getIndiceEquidadJain()) + "\n\n";
 
-        ventana.add(
-                new MetricsChartPanel(metricas, false));
+    reporte += "PRODUCTOR-CONSUMIDOR\n";
+    reporte += "Elementos producidos: " + sistema.getElementosProducidos() + "\n";
+    reporte += "Elementos consumidos: " + sistema.getElementosConsumidos() + "\n";
+    reporte += "Promedio de ciclos bloqueados en semáforos: "
+            + String.format("%.2f", sistema.getPromedioBloqueoSemaforos()) + "\n";
+
+    Object[] buffers = cluster.getBuffers();
+    for (int i = 0; i < buffers.length; i++) {
+        Buffer b = (Buffer) buffers[i];
+        reporte += "  " + b.getTag() + " (H" + b.getHostComputerId() + "): producidos "
+                + b.getProduced() + ", consumidos " + b.getConsumed()
+                + ", bloqueo promedio "
+                + String.format("%.2f", sistema.getPromedioBloqueoSemaforos(b.getId()))
+                + " ciclos\n";
     }
-    ventana.setSize(1100, 350 * computers.length);
+    return reporte;
+}
+
+private void mostrarGraficas() {
+    CpuUtilizationChart ventana = new CpuUtilizationChart(computers);
     ventana.setLocationRelativeTo(this);
     ventana.setVisible(true);
 }
