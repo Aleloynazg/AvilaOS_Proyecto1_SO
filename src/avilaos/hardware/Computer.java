@@ -191,13 +191,7 @@ public class Computer implements ClockListener {
         kernel.tickDeadlines(ciclo);
         kernel.admitNewProcesses(ciclo);
         kernel.contarTiempoEsperaReady();
-}
-private void procesarCiclo(long ciclo) {
-    kernel.tickTimedBlocks(ciclo);
-    kernel.tickDeadlines(ciclo);
-    kernel.admitNewProcesses(ciclo);
-    kernel.contarTiempoEsperaReady();
-    kernel.contarTiempoBloqueoSemaforos();
+        kernel.contarTiempoBloqueoSemaforos();
 
         PCB procesoActual = cpu.getCurrentProcess();
 
