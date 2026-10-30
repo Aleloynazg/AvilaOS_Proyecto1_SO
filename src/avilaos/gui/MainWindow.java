@@ -4,6 +4,8 @@ import avilaos.hardware.Computer;
 import avilaos.hardware.Cluster;
 import avilaos.hardware.ComputerMetrics;
 import avilaos.hardware.GlobalClock;
+import avilaos.hardware.SystemMetrics;
+import avilaos.kernel.sync.Buffer;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -213,7 +215,11 @@ private void mostrarMetricas() {
         + "%\n\n";
     }
 
-    JTextArea area = new JTextArea(reporte, 20, 40);
+    if (cluster != null) {
+        reporte += reporteSistema();
+    }
+
+    JTextArea area = new JTextArea(reporte, 24, 44);
     area.setEditable(false);
 
     JOptionPane.showMessageDialog(
@@ -223,6 +229,41 @@ private void mostrarMetricas() {
             JOptionPane.INFORMATION_MESSAGE
     );
 }
+/** Totales del clúster y métricas de productor-consumidor por buffer. */
+private String reporteSistema() {
+    SystemMetrics sistema = new SystemMetrics(cluster);
+    String reporte = "SISTEMA COMPLETO\n";
+
+    reporte += "Procesos terminados: " + sistema.getProcesosTerminados() + "\n";
+    reporte += "Deadlines incumplidos: " + sistema.getDeadlinesIncumplidos() + "\n";
+    reporte += "Throughput: " + String.format("%.4f", sistema.getThroughput())
+            + " procesos/ciclo\n";
+    reporte += "Uso de CPU: " + String.format("%.2f", sistema.getUtilizacionCPU()) + "%\n";
+    reporte += "Tiempo promedio de respuesta: "
+            + String.format("%.2f", sistema.getPromedioTiempoRespuesta()) + "\n";
+    reporte += "Deadlines cumplidos: "
+            + String.format("%.2f", sistema.getPorcentajeDeadlinesCumplidos()) + "%\n";
+    reporte += "Índice de equidad de Jain: "
+            + String.format("%.4f", sistema.getIndiceEquidadJain()) + "\n\n";
+
+    reporte += "PRODUCTOR-CONSUMIDOR\n";
+    reporte += "Elementos producidos: " + sistema.getElementosProducidos() + "\n";
+    reporte += "Elementos consumidos: " + sistema.getElementosConsumidos() + "\n";
+    reporte += "Promedio de ciclos bloqueados en semáforos: "
+            + String.format("%.2f", sistema.getPromedioBloqueoSemaforos()) + "\n";
+
+    Object[] buffers = cluster.getBuffers();
+    for (int i = 0; i < buffers.length; i++) {
+        Buffer b = (Buffer) buffers[i];
+        reporte += "  " + b.getTag() + " (H" + b.getHostComputerId() + "): producidos "
+                + b.getProduced() + ", consumidos " + b.getConsumed()
+                + ", bloqueo promedio "
+                + String.format("%.2f", sistema.getPromedioBloqueoSemaforos(b.getId()))
+                + " ciclos\n";
+    }
+    return reporte;
+}
+
 private void mostrarGraficas() {
     CpuUtilizationChart ventana = new CpuUtilizationChart(computers);
     ventana.setLocationRelativeTo(this);

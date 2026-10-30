@@ -121,6 +121,7 @@ private void procesarCiclo(long ciclo) {
     kernel.tickDeadlines(ciclo);
     kernel.admitNewProcesses(ciclo);
     kernel.contarTiempoEsperaReady();
+    kernel.contarTiempoBloqueoSemaforos();
 
     PCB procesoActual = cpu.getCurrentProcess();
 

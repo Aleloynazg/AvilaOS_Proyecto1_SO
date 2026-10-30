@@ -101,6 +101,17 @@ public class Kernel {
     }
 }
     
+    /** Suma un ciclo a cada proceso bloqueado esperando en un semáforo (métrica de productor-consumidor). */
+    public void contarTiempoBloqueoSemaforos() {
+        Object[] blocked = blockedQueue.toArray();
+        for (Object o : blocked) {
+            PCB p = (PCB) o;
+            if (isWaitingOnSemaphore(p)) {
+                p.incrementCyclesBlockedOnSemaphores();
+            }
+        }
+    }
+
     /**
      * Termina un proceso: lo saca de la cola donde esté, libera su memoria
      * (si la tenía) y revisa si ahora cabe alguno de Nuevos.
