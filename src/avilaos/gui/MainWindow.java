@@ -224,21 +224,7 @@ private void mostrarMetricas() {
     );
 }
 private void mostrarGraficas() {
-    javax.swing.JFrame ventana =
-            new javax.swing.JFrame("Gráficas de métricas");
-    ventana.setLayout(
-            new java.awt.GridLayout(computers.length, 2, 10, 10));
-    for (int i = 0; i < computers.length; i++) {
-        ComputerMetrics metricas =
-                computers[i].getMetrics();
-
-        ventana.add(
-                new MetricsChartPanel(metricas, true));
-
-        ventana.add(
-                new MetricsChartPanel(metricas, false));
-    }
-    ventana.setSize(1100, 350 * computers.length);
+    CpuUtilizationChart ventana = new CpuUtilizationChart(computers);
     ventana.setLocationRelativeTo(this);
     ventana.setVisible(true);
 }
