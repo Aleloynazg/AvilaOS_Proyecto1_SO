@@ -1,0 +1,119 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+package avilaos.kernel.disk;
+
+/**
+ * * Administra las solicitudes de entrada y salida del disco y coordina su atención mediante una política de planificación.
+ * @author alexandraloynaz
+ */
+
+import avilaos.structures.LinkedQueue;
+import java.util.concurrent.Semaphore;
+import avilaos.hardware.disk.HeadDirection;
+
+
+public class DiskScheduler {
+ private final LinkedQueue<DiskRequest> requests;
+    private final Semaphore availableRequests;
+
+    private DiskSchedulingPolicy policy;
+
+    /**
+     * Construye el planificador con una política inicial.
+     *
+     * @param policy política de planificación utilizada
+     */
+    public DiskScheduler(DiskSchedulingPolicy policy) {
+        this.requests = new LinkedQueue<>();
+        this.availableRequests = new Semaphore(0);
+        this.policy = policy;
+    }
+
+    /**
+     * Agrega una solicitud a la cola.
+     *
+     * @param request solicitud de entrada y salida
+     */
+    public void addRequest(DiskRequest request) {
+        if (request == null) {
+            return;
+        }
+
+        requests.enqueue(request);
+        availableRequests.release();
+    }
+
+    /**
+     * Indica si existen solicitudes pendientes.
+     *
+     * @return true si hay solicitudes pendientes
+     */
+    public boolean hasRequests() {
+        return !requests.isEmpty();
+    }
+
+    /**
+     * Devuelve la cantidad de solicitudes pendientes.
+     *
+     * @return cantidad de solicitudes
+     */
+    public int getRequestCount() {
+        return requests.size();
+    }
+
+    /**
+     * Selecciona la siguiente solicitud según la política activa.
+     *
+     * @param currentHead posición actual del cabezal
+     * @param direction dirección actual del cabezal
+     * @return solicitud seleccionada
+     */
+    public DiskRequest getNextRequest(int currentHead,
+                                      HeadDirection direction) {
+
+        if (!availableRequests.tryAcquire()) {
+            return null;
+        }
+
+        DiskRequest nextRequest = policy.next(
+                requests, currentHead, direction
+        );
+
+        if (nextRequest == null) {
+            availableRequests.release();
+        }
+
+        return nextRequest;
+    }
+
+    /**
+     * Cambia la política de planificación.
+     *
+     * @param policy nueva política
+     */
+    public void setPolicy(DiskSchedulingPolicy policy) {
+        if (policy != null) {
+            this.policy = policy;
+        }
+    }
+
+    /**
+     * Obtiene la política de planificación activa.
+     *
+     * @return política actual
+     */
+    public DiskSchedulingPolicy getPolicy() {
+        return policy;
+    }
+
+    /**
+     * Obtiene una copia de las solicitudes pendientes.
+     *
+     * @return arreglo con las solicitudes
+     */
+    public Object[] getRequests() {
+        return requests.toArray();
+    }
+}
