@@ -6,7 +6,10 @@ public enum ProcessState {
     READY("Listo"),
     RUNNING("Ejecución"),
     BLOCKED("Bloqueado"),
-    TERMINATED("Terminado");
+    TERMINATED("Terminado"),
+    READY_SUSPENDED("Listo suspendido"),
+    BLOCKED_SUSPENDED("Bloqueado suspendido");
+    
 
     private final String label;
 
