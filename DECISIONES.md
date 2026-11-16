@@ -77,3 +77,73 @@ equipo y actualizar este archivo en el mismo PR.
 | Productor-consumidor | Elementos producidos y consumidos por buffer; promedio de ciclos bloqueados en semáforos por proceso |
 
 Las métricas globales se calculan sumando los contadores de todos los computadores, no promediando los porcentajes.
+
+
+## 7. Organización del disco
+
+| Tema | Decisión | Por qué |
+| --- | --- | --- |
+| Capacidad | 300 bloques físicos. | Permite separar el almacenamiento de archivos del área de intercambio. |
+| Sistema de archivos | Bloques 0–199. | Se reservan 200 bloques para archivos y directorios. |
+| Área de intercambio (swap) | Bloques 200–299. | Se reservan 100 bloques para suspender procesos. |
+| Destino de solicitudes | Primer bloque del archivo o elemento involucrado. Para SUSPEND y RESUME, primer bloque del espacio de intercambio del proceso. | Permite determinar hacia dónde debe desplazarse el cabezal. |
+
+## 8. Planificación del disco
+
+| Política | Regla |
+| --- | --- |
+| FIFO | Atiende las solicitudes en orden de llegada. |
+| SSTF | Atiende la solicitud cuyo bloque de destino esté más cerca del cabezal actual. |
+| SCAN | El cabezal avanza en una dirección atendiendo solicitudes y llega hasta el extremo del disco antes de cambiar de dirección. |
+| C-SCAN | El cabezal atiende solicitudes en una dirección. Al llegar al extremo, regresa al bloque 0 sin contar ese desplazamiento como movimiento atendido. |
+| LOOK | Política adicional opcional: cambia de dirección al llegar a la última solicitud pendiente, sin recorrer hasta el extremo físico. |
+
+**- Dirección inicial:** el cabezal comienza desplazándose hacia los bloques de mayor numeración.
+
+**- Costo de atención:** se calcula sumando los ciclos necesarios para el movimiento del cabezal y los ciclos de transferencia. Se añade un ciclo por cada bloque transferido.
+
+**- Velocidad del cabezal:** por defecto, avanza una posición por ciclo. Este valor será configurable mediante `headSpeed`.
+
+**- Posición final:** al completar una solicitud, el cabezal queda ubicado en el bloque de destino.
+
+## 9. Solicitudes de entrada y salida
+
+| Operación | Bloques involucrados |
+| --- | --- |
+| CREATE | Cantidad de bloques correspondientes al tamaño del archivo. |
+| READ | Cantidad de bloques correspondientes al tamaño del archivo. |
+| UPDATE | 1 bloque. |
+| DELETE | 1 bloque. |
+| SUSPEND | Cantidad de bloques necesarios para almacenar la memoria del proceso. |
+| RESUME | Cantidad de bloques correspondientes a la memoria del proceso almacenada en swap. |
+
+**- Las solicitudes almacenan el proceso que las genera, la operación, el bloque de destino, la cantidad de bloques y el ciclo de llegada. También pueden incluir la ruta, el nuevo nombre, el propietario y los permisos del elemento.**
+
+**- Las operaciones CREATE reservan los bloques al generar la solicitud. Las operaciones UPDATE y DELETE se aplican cuando el disco termina de atenderlas. Si una solicitud falla o se cancela, los recursos reservados deben liberarse.**
+
+**- Las operaciones de directorios utilizarán como destino el primer bloque del directorio correspondiente.**
+
+## 10. Validación y permisos del sistema de archivos
+
+| Elemento | Decisión |
+| --- | --- |
+| Usuarios | Se contemplan los modos ADMIN y USER. |
+| Permisos | Los elementos podrán ser PUBLIC o PRIVATE. |
+| Lectura | Un usuario puede leer sus propios archivos y los archivos públicos. |
+| Creación | Un usuario puede crear elementos únicamente dentro de sus propios directorios. |
+| Eliminación | Un usuario puede eliminar únicamente sus propios archivos. |
+| Renombrado | Solo ADMIN puede renombrar elementos. |
+
+**- Las solicitudes se validan al crearse y nuevamente cuando el disco termina de atenderlas. Si las condiciones cambiaron mientras la solicitud esperaba, la operación se marca como fallida y se registra en el log.**
+
+**- Una ruta inexistente, un permiso insuficiente o la falta de bloques disponibles deben provocar el rechazo de la operación sin detener la simulación.**
+
+## 11. Integración con los procesos
+
+**- Las operaciones de disco se representan mediante instrucciones `DISK_REQUEST` ejecutadas en modo sistema operativo.**
+
+**- Al generar una solicitud, el proceso pasa al estado `BLOCKED` con motivo `DISK_IO`. Cuando termina la operación, vuelve a `READY` y continúa con sus instrucciones pendientes en modo usuario.**
+
+**- Si no hay memoria RAM suficiente para admitir un proceso, se selecciona primero un proceso bloqueado como candidato a suspensión. Entre los candidatos se selecciona el de menor prioridad; si hay empate, se elige el que lleve más tiempo bloqueado. Si no hay procesos bloqueados, el nuevo proceso permanece en la cola de Nuevos.**
+
+**- Cuando se libera memoria, se prioriza la reactivación de procesos suspendidos que estén listos, antes de admitir procesos nuevos. La memoria necesaria para reactivar un proceso se reserva al generar la solicitud RESUME. Si la operación falla, se libera la reserva.**
