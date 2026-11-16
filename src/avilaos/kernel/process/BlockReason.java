@@ -10,7 +10,9 @@ public enum BlockReason {
     SEM_EMPTY("Semáforo 'vacíos' (e): buffer lleno"),
     SEM_FULL("Semáforo 'llenos' (n): buffer vacío"),
     SEM_MUTEX("Semáforo 'mutex' (s): región crítica ocupada"),
-    NETWORK("Latencia de red (buffer remoto)");
+    NETWORK("Latencia de red (buffer remoto)"),
+    DISK_IO("Esperando E/S del disco");
+    
 
     private final String label;
 

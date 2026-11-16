@@ -5,7 +5,9 @@ public enum ProcessType {
     CPU_BOUND("CPU bound"),
     IO_BOUND("I/O bound"),
     PRODUCER("Productor"),
-    CONSUMER("Consumidor");
+    CONSUMER("Consumidor"),
+    FILE_IO("Operaciones del sistema de archivos");
+    
 
     private final String label;
 

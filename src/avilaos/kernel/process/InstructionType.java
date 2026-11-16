@@ -13,7 +13,8 @@ public enum InstructionType {
     SEM_WAIT(true),
     SEM_SIGNAL(true),
     APPEND(true),
-    TAKE(true);
+    TAKE(true), 
+    DISK_REQUEST(true);
 
     private final boolean kernelMode;
 
