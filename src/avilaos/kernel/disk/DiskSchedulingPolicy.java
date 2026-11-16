@@ -27,4 +27,12 @@ public interface DiskSchedulingPolicy {
      * @return tipo de política
      */
     DiskPolicyType getType();
+    /**
+    * Obtiene la dirección que debe utilizarse
+    * en la siguiente selección.
+    *
+    * @return dirección del cabezal
+    */
+   HeadDirection getNextDirection();
+
 }

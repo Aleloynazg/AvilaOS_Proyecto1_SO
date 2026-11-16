@@ -33,11 +33,12 @@ public class DiskPolicyFactory {
                 return new SstfPolicy();
 
             case SCAN:
+                return new ScanPolicy();
             case CSCAN:
+                return new CScanPolicy();
             case LOOK:
-                throw new UnsupportedOperationException(
-                        "La política " + type + " todavía no está implementada."
-                );
+                return new LookPolicy();
+                
 
             default:
                 throw new IllegalArgumentException(

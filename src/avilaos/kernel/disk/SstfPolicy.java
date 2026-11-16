@@ -8,33 +8,30 @@ import avilaos.hardware.disk.HeadDirection;
 import avilaos.structures.LinkedQueue;
 
 /**
- * Implementa la política SSTF para la planificación del disco.
- * Selecciona la solicitud cuyo bloque esté más cerca de la posición actual del cabezal.
+ * Implementa la política SSTF (Shortest Seek Time First).
+ * Selecciona la solicitud cuya posición está más cerca
+ * de la posición actual del cabezal.
+ *
  * @author alexandraloynaz
  */
 public class SstfPolicy implements DiskSchedulingPolicy {
 
-    /**
-     * Selecciona la solicitud con menor distancia al cabezal.
-     *
-     * @param queue cola de solicitudes pendientes
-     * @param currentHead posición actual del cabezal
-     * @param direction dirección actual del cabezal
-     * @return solicitud más cercana
-     */
+    private HeadDirection nextDirection = HeadDirection.UP;
+
     @Override
     public DiskRequest next(LinkedQueue<DiskRequest> queue,
                             int currentHead,
                             HeadDirection direction) {
 
+        nextDirection = direction;
+
         if (queue == null || queue.isEmpty()) {
             return null;
         }
 
-        DiskRequest closestRequest = null;
+        DiskRequest selectedRequest = null;
         int shortestDistance = Integer.MAX_VALUE;
 
-        // Revisar todas las solicitudes pendientes.
         for (int i = 0; i < queue.size(); i++) {
 
             DiskRequest request = queue.get(i);
@@ -45,23 +42,24 @@ public class SstfPolicy implements DiskSchedulingPolicy {
 
             if (distance < shortestDistance) {
                 shortestDistance = distance;
-                closestRequest = request;
+                selectedRequest = request;
             }
         }
 
-        // Eliminar de la cola la solicitud seleccionada.
-        queue.remove(closestRequest);
+        if (selectedRequest != null) {
+            queue.remove(selectedRequest);
+        }
 
-        return closestRequest;
+        return selectedRequest;
     }
 
-    /**
-     * Obtiene el tipo de política.
-     *
-     * @return SSTF
-     */
     @Override
     public DiskPolicyType getType() {
         return DiskPolicyType.SSTF;
+    }
+
+    @Override
+    public HeadDirection getNextDirection() {
+        return nextDirection;
     }
 }
