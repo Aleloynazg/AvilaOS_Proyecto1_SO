@@ -15,7 +15,8 @@ import avilaos.hardware.disk.HeadDirection;
 
 
 public class DiskScheduler {
- private final LinkedQueue<DiskRequest> requests;
+ 
+    private final LinkedQueue<DiskRequest> requests;
     private final Semaphore availableRequests;
 
     private DiskSchedulingPolicy policy;
@@ -26,6 +27,13 @@ public class DiskScheduler {
      * @param policy política de planificación utilizada
      */
     public DiskScheduler(DiskSchedulingPolicy policy) {
+
+        if (policy == null) {
+            throw new IllegalArgumentException(
+                    "La política de planificación no puede ser null."
+            );
+        }
+
         this.requests = new LinkedQueue<>();
         this.availableRequests = new Semaphore(0);
         this.policy = policy;
@@ -37,6 +45,7 @@ public class DiskScheduler {
      * @param request solicitud de entrada y salida
      */
     public void addRequest(DiskRequest request) {
+
         if (request == null) {
             return;
         }
@@ -68,7 +77,7 @@ public class DiskScheduler {
      *
      * @param currentHead posición actual del cabezal
      * @param direction dirección actual del cabezal
-     * @return solicitud seleccionada
+     * @return solicitud seleccionada o null si no se seleccionó ninguna
      */
     public DiskRequest getNextRequest(int currentHead,
                                       HeadDirection direction) {
@@ -94,6 +103,7 @@ public class DiskScheduler {
      * @param policy nueva política
      */
     public void setPolicy(DiskSchedulingPolicy policy) {
+
         if (policy != null) {
             this.policy = policy;
         }
@@ -106,6 +116,15 @@ public class DiskScheduler {
      */
     public DiskSchedulingPolicy getPolicy() {
         return policy;
+    }
+
+    /**
+     * Obtiene la dirección indicada por la política activa.
+     *
+     * @return dirección del cabezal para la siguiente selección
+     */
+    public HeadDirection getNextDirection() {
+        return policy.getNextDirection();
     }
 
     /**
