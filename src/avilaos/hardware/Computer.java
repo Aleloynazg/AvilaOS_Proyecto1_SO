@@ -25,10 +25,13 @@ import avilaos.kernel.scheduler.FCFSPolicy;
 import avilaos.kernel.process.BlockReason;
 import avilaos.kernel.process.Instruction;
 import avilaos.kernel.process.InstructionModel;
-import avilaos.kernel.process.InstructionType;
 import avilaos.kernel.process.ProcessState;
 import avilaos.kernel.sync.SyncExecutor;
 import avilaos.kernel.process.InstructionType;
+import avilaos.hardware.disk.Disk;
+import avilaos.kernel.disk.DiskScheduler;
+import avilaos.kernel.disk.DiskPolicyFactory;
+import avilaos.kernel.disk.DiskPolicyType;
 
 
 
@@ -43,6 +46,8 @@ public class Computer implements ClockListener {
     private final ComputerMetrics metrics;
     private boolean instruccionEjecutada;
     private SyncExecutor syncExecutor;
+    private final Disk disk;
+    private final DiskScheduler diskScheduler;
  /**
      * Construye un computador e inicializa sus componentes.
      *
@@ -73,6 +78,17 @@ public class Computer implements ClockListener {
         this.cyclesCPU = 0;
         this.metrics = new ComputerMetrics(id);
         this.kernel.setMetrics(this.metrics);
+        this.diskScheduler = new DiskScheduler(
+        DiskPolicyFactory.create(DiskPolicyType.FIFO)
+        );
+
+        this.disk = new Disk();
+        this.disk.setKernel(kernel);
+        this.disk.setScheduler(diskScheduler);
+
+        this.cpu.setEventListener((cycle, message) -> {
+            kernel.reportEvent(cycle, message);
+        });
 
     }
     /**
@@ -153,6 +169,7 @@ public class Computer implements ClockListener {
     public void conectarReloj(GlobalClock reloj) {
         if (reloj != null) {
             reloj.addListener(this);
+            reloj.addListener(disk);
         }
     }
 
