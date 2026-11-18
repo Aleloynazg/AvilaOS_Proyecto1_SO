@@ -15,8 +15,6 @@ import avilaos.structures.LinkedQueue;
  */
 public class ScanPolicy implements DiskSchedulingPolicy {
 
-    private static final int MIN_BLOCK = 0;
-    private static final int MAX_BLOCK = 299;
 
     private HeadDirection nextDirection = HeadDirection.UP;
 
@@ -56,7 +54,6 @@ public class ScanPolicy implements DiskSchedulingPolicy {
                 int targetBlock = request.getTargetBlock();
 
                 if (targetBlock > currentHead
-                        && targetBlock <= MAX_BLOCK
                         && targetBlock < closestBlock) {
 
                     closestBlock = targetBlock;
@@ -76,7 +73,6 @@ public class ScanPolicy implements DiskSchedulingPolicy {
                 int targetBlock = request.getTargetBlock();
 
                 if (targetBlock < currentHead
-                        && targetBlock >= MIN_BLOCK
                         && targetBlock > closestBlock) {
 
                     closestBlock = targetBlock;

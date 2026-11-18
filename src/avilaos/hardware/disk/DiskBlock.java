@@ -14,9 +14,13 @@ public class DiskBlock {
     private final boolean swapBlock;
     private PCB owner;
 
-    public DiskBlock(int blockNumber) {
+    /**
+     * @param blockNumber número del bloque
+     * @param swapBlock   true si pertenece al área de intercambio (lo decide el Disk)
+     */
+    public DiskBlock(int blockNumber, boolean swapBlock) {
         this.blockNumber = blockNumber;
-        this.swapBlock = blockNumber >= 200;
+        this.swapBlock = swapBlock;
         this.owner = null;
     }
 
