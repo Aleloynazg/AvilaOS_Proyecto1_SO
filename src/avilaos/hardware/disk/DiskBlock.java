@@ -3,6 +3,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package avilaos.hardware.disk;
+import avilaos.kernel.fs.FileEntry;
 import avilaos.kernel.process.PCB;
 /**
  *
@@ -12,7 +13,9 @@ import avilaos.kernel.process.PCB;
 public class DiskBlock {
     private final int blockNumber;
     private final boolean swapBlock;
-    private PCB owner;
+    private PCB owner;          // proceso suspendido dueño del bloque (zona de swap)
+    private FileEntry file;     // archivo dueño del bloque (zona de archivos)
+    private int next = -1;      // asignación encadenada: siguiente bloque del archivo, -1 = último
 
     /**
      * @param blockNumber número del bloque
@@ -32,8 +35,26 @@ public class DiskBlock {
         return swapBlock;
     }
 
+    /** Libre = no es de ningún proceso ni de ningún archivo. */
     public boolean isFree() {
-        return owner == null;
+        return owner == null && file == null;
+    }
+
+    public FileEntry getFile() {
+        return file;
+    }
+
+    public void setFile(FileEntry file) {
+        this.file = file;
+    }
+
+    /** Número del siguiente bloque del archivo, o -1 si este es el último. */
+    public int getNext() {
+        return next;
+    }
+
+    public void setNext(int next) {
+        this.next = next;
     }
 
     public PCB getOwner() {

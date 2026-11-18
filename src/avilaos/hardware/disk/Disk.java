@@ -3,6 +3,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package avilaos.hardware.disk;
+import avilaos.kernel.fs.FileEntry;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.disk.DiskScheduler;
 import avilaos.kernel.disk.DiskRequest;
@@ -442,6 +443,108 @@ public class Disk implements ClockListener{
 
     public int getTotalBlocks() {
         return totalBlocks;
+    }
+
+    // ------------------------------------------------------------------
+    // Asignación ENCADENADA de archivos (la que pide el enunciado).
+    // Cada bloque guarda el número del siguiente; el archivo solo guarda
+    // el primero. Los bloques de un archivo no tienen que estar juntos.
+    // ------------------------------------------------------------------
+
+    /**
+     * Asigna a un archivo los primeros bloques libres de la zona de archivos,
+     * aunque no estén seguidos, y los encadena.
+     *
+     * @return el primer bloque de la cadena, o -1 si no hay suficientes libres
+     *         (en ese caso no se toca ningún bloque)
+     */
+    public int allocateFileChain(FileEntry file, int numberOfBlocks) {
+        if (file == null || numberOfBlocks <= 0
+                || numberOfBlocks > countFreeFileBlocks()) {
+            return -1;
+        }
+        int first = -1;
+        int previous = -1;
+        int assigned = 0;
+        for (int i = fileSystemStart; i <= fileSystemEnd && assigned < numberOfBlocks; i++) {
+            if (blocks[i].isFree()) {
+                blocks[i].setFile(file);
+                blocks[i].setNext(-1);
+                if (previous == -1) {
+                    first = i;
+                } else {
+                    blocks[previous].setNext(i);
+                }
+                previous = i;
+                assigned++;
+            }
+        }
+        return first;
+    }
+
+    /**
+     * Asigna a un archivo los bloques startBlock .. startBlock + n - 1 y los
+     * encadena. Lo usa la carga del JSON, que trae "startBlock" y "blocks".
+     *
+     * @return false si algún bloque está fuera de la zona de archivos o ocupado
+     *         (en ese caso no se toca ningún bloque)
+     */
+    public boolean allocateFileAt(FileEntry file, int startBlock, int numberOfBlocks) {
+        if (file == null || numberOfBlocks <= 0 || startBlock < fileSystemStart
+                || startBlock + numberOfBlocks - 1 > fileSystemEnd) {
+            return false;
+        }
+        for (int i = startBlock; i < startBlock + numberOfBlocks; i++) {
+            if (!blocks[i].isFree()) {
+                return false;
+            }
+        }
+        for (int i = startBlock; i < startBlock + numberOfBlocks; i++) {
+            blocks[i].setFile(file);
+            blocks[i].setNext(i + 1 < startBlock + numberOfBlocks ? i + 1 : -1);
+        }
+        return true;
+    }
+
+    /**
+     * Libera todos los bloques de la cadena que empieza en firstBlock.
+     *
+     * @return cuántos bloques se liberaron
+     */
+    public int freeFileChain(int firstBlock) {
+        int freed = 0;
+        int current = firstBlock;
+        // El límite de pasos evita un ciclo infinito si la cadena estuviera dañada.
+        while (current >= fileSystemStart && current <= fileSystemEnd
+                && blocks[current].getFile() != null && freed < totalBlocks) {
+            int next = blocks[current].getNext();
+            blocks[current].setFile(null);
+            blocks[current].setNext(-1);
+            freed++;
+            current = next;
+        }
+        return freed;
+    }
+
+    /**
+     * Los números de bloque de la cadena, en orden. Sirve para la tabla de
+     * asignación y para dibujar el mapa del disco.
+     */
+    public int[] getChain(int firstBlock) {
+        int length = 0;
+        int current = firstBlock;
+        while (current >= 0 && current < totalBlocks && length < totalBlocks
+                && blocks[current].getFile() != null) {
+            length++;
+            current = blocks[current].getNext();
+        }
+        int[] chain = new int[length];
+        current = firstBlock;
+        for (int i = 0; i < length; i++) {
+            chain[i] = current;
+            current = blocks[current].getNext();
+        }
+        return chain;
     }
 
     /** Número del último bloque del disco: SCAN y C-SCAN llegan hasta él. */
