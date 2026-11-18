@@ -17,9 +17,10 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
- * Vista de configuración inicial: número de computadores, RAM, política,
- * quantum, latencia y duración del ciclo; o cargar todo desde un archivo JSON.
+ * Vista de configuración inicial del computador: RAM, política, quantum y
+ * duración del ciclo; o cargar todo desde un archivo JSON.
  * Los spinners solo aceptan números dentro de su rango.
+ * (En la F5.1 se reemplaza por la carga obligatoria de los dos JSON.)
  */
 public class StartupDialog {
 
@@ -27,17 +28,13 @@ public class StartupDialog {
     private static final String LOAD = "Cargar archivo JSON...";
     private static final String EXIT = "Salir";
 
-    private final JSpinner computerCount = spinner(2, SimulationConfig.MIN_COMPUTERS,
-            SimulationConfig.MAX_COMPUTERS, 1);
     private final JSpinner cycleMs = spinner(500, SimulationConfig.MIN_CYCLE_MS,
             SimulationConfig.MAX_CYCLE_MS, 50);
-    private final JSpinner latency = spinner(3, SimulationConfig.MIN_LATENCY,
-            SimulationConfig.MAX_LATENCY, 1);
-
-    private final JLabel[] rowLabels = new JLabel[SimulationConfig.MAX_COMPUTERS];
-    private final JSpinner[] ram = new JSpinner[SimulationConfig.MAX_COMPUTERS];
-    private final JComboBox<SchedulingPolicyType>[] policy = newCombos();
-    private final JSpinner[] quantum = new JSpinner[SimulationConfig.MAX_COMPUTERS];
+    private final JSpinner ram = spinner(1024, SimulationConfig.MIN_RAM,
+            SimulationConfig.MAX_RAM, 128);
+    private final JComboBox<SchedulingPolicyType> policy = new JComboBox<>(SchedulingPolicyType.values());
+    private final JSpinner quantum = spinner(4, SimulationConfig.MIN_QUANTUM,
+            SimulationConfig.MAX_QUANTUM, 1);
 
     /**
      * Muestra la vista hasta que el usuario elige una configuración válida.
@@ -71,68 +68,28 @@ public class StartupDialog {
     }
 
     private JPanel buildForm() {
-        JPanel form = new JPanel(new GridLayout(0, 4, 8, 6));
-
-        JPanel general = new JPanel(new GridLayout(0, 2, 8, 6));
-        general.add(new JLabel("Número de computadores (2-4):"));
-        general.add(computerCount);
-        general.add(new JLabel("Duración del ciclo (ms, 50-5000):"));
-        general.add(cycleMs);
-        general.add(new JLabel("Latencia de red (ciclos, 0-20):"));
-        general.add(latency);
-
-        form.add(new JLabel("Computador"));
-        form.add(new JLabel("RAM (MB, 128-8192)"));
-        form.add(new JLabel("Política inicial"));
-        form.add(new JLabel("Quantum (1-20)"));
-
-        for (int i = 0; i < SimulationConfig.MAX_COMPUTERS; i++) {
-            rowLabels[i] = new JLabel("H" + (i + 1));
-            ram[i] = spinner(1024, SimulationConfig.MIN_RAM, SimulationConfig.MAX_RAM, 128);
-            policy[i] = new JComboBox<>(SchedulingPolicyType.values());
-            quantum[i] = spinner(4, SimulationConfig.MIN_QUANTUM, SimulationConfig.MAX_QUANTUM, 1);
-            form.add(rowLabels[i]);
-            form.add(ram[i]);
-            form.add(policy[i]);
-            form.add(quantum[i]);
-        }
-
-        computerCount.addChangeListener(e -> showRows());
-        showRows();
-
-        JPanel all = new JPanel(new java.awt.BorderLayout(0, 10));
-        all.add(general, java.awt.BorderLayout.NORTH);
-        all.add(form, java.awt.BorderLayout.CENTER);
-        return all;
-    }
-
-    /** Solo se ven las filas de los computadores que existirán. */
-    private void showRows() {
-        int count = (Integer) computerCount.getValue();
-        for (int i = 0; i < SimulationConfig.MAX_COMPUTERS; i++) {
-            boolean used = i < count;
-            rowLabels[i].setEnabled(used);
-            ram[i].setEnabled(used);
-            policy[i].setEnabled(used);
-            quantum[i].setEnabled(used);
-        }
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 6));
+        form.add(new JLabel("Duración del ciclo (ms, 50-5000):"));
+        form.add(cycleMs);
+        form.add(new JLabel("RAM (MB, 128-8192):"));
+        form.add(ram);
+        form.add(new JLabel("Política de CPU inicial:"));
+        form.add(policy);
+        form.add(new JLabel("Quantum (1-20):"));
+        form.add(quantum);
+        return form;
     }
 
     private SimulationConfig readForm() throws ParseException {
-        computerCount.commitEdit();
         cycleMs.commitEdit();
-        latency.commitEdit();
+        ram.commitEdit();
+        quantum.commitEdit();
 
-        SimulationConfig config = SimulationConfig.defaults((Integer) computerCount.getValue());
+        SimulationConfig config = SimulationConfig.defaults();
         config.cycleDurationMs = (Integer) cycleMs.getValue();
-        config.networkLatency = (Integer) latency.getValue();
-        for (int i = 0; i < config.computers.length; i++) {
-            ram[i].commitEdit();
-            quantum[i].commitEdit();
-            config.computers[i].ramMb = (Integer) ram[i].getValue();
-            config.computers[i].policy = ((SchedulingPolicyType) policy[i].getSelectedItem()).name();
-            config.computers[i].quantum = (Integer) quantum[i].getValue();
-        }
+        config.computer.ramMb = (Integer) ram.getValue();
+        config.computer.policy = ((SchedulingPolicyType) policy.getSelectedItem()).name();
+        config.computer.quantum = (Integer) quantum.getValue();
         config.validate();
         return config;
     }
@@ -149,10 +106,5 @@ public class StartupDialog {
 
     private static JSpinner spinner(int value, int min, int max, int step) {
         return new JSpinner(new SpinnerNumberModel(value, min, max, step));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static JComboBox<SchedulingPolicyType>[] newCombos() {
-        return new JComboBox[SimulationConfig.MAX_COMPUTERS];
     }
 }

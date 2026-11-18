@@ -12,7 +12,7 @@ package avilaos.hardware;
  *
  * Coordina la ejecución de procesos en cada ciclo del reloj global,
  * incluyendo la planificación, ejecución de instrucciones,
- * gestión de bloqueos y sincronización.
+ * gestión de bloqueos y finalización de procesos.
  *
  * @author alexandraloynaz
  */
@@ -26,7 +26,6 @@ import avilaos.kernel.process.BlockReason;
 import avilaos.kernel.process.Instruction;
 import avilaos.kernel.process.InstructionModel;
 import avilaos.kernel.process.ProcessState;
-import avilaos.kernel.sync.SyncExecutor;
 import avilaos.kernel.process.InstructionType;
 import avilaos.hardware.disk.Disk;
 import avilaos.kernel.disk.DiskScheduler;
@@ -45,7 +44,6 @@ public class Computer implements ClockListener {
     private int cyclesCPU;
     private final ComputerMetrics metrics;
     private boolean instruccionEjecutada;
-    private SyncExecutor syncExecutor;
     private final Disk disk;
     private final DiskScheduler diskScheduler;
  /**
@@ -124,15 +122,6 @@ public class Computer implements ClockListener {
         return kernel;
     }
         /**
-     * Configura el ejecutor de instrucciones de sincronización.
-     *
-     * @param syncExecutor ejecutor encargado de gestionar semáforos
-     *                     y operaciones sobre buffers.
-     */
-    public void setSyncExecutor(SyncExecutor syncExecutor) {
-        this.syncExecutor = syncExecutor;}
-
-        /**
      * Muestra por consola el estado actual del computador,
      * incluyendo el estado de la CPU, su modo de ejecución
      * y la memoria RAM utilizada y disponible.
@@ -199,7 +188,7 @@ public class Computer implements ClockListener {
  * del proceso seleccionado.
  *
  * También gestiona las solicitudes de E/S, las instrucciones
- * de sincronización y la finalización de procesos.
+ * en modo sistema operativo y la finalización de procesos.
  *
  * @param ciclo número del ciclo actual del reloj global.
  */
@@ -208,7 +197,6 @@ public class Computer implements ClockListener {
         kernel.tickDeadlines(ciclo);
         kernel.admitNewProcesses(ciclo);
         kernel.contarTiempoEsperaReady();
-        kernel.contarTiempoBloqueoSemaforos();
 
         PCB procesoActual = cpu.getCurrentProcess();
 
@@ -314,8 +302,8 @@ public class Computer implements ClockListener {
             return;
         }
 
-        // Las instrucciones de semáforos y buffers se ejecutan
-        // en modo KERNEL, sin liberar el proceso de la CPU.
+        // Las instrucciones de modo sistema operativo (en el Proyecto 2,
+        // DISK_REQUEST) se ejecutan en modo KERNEL. La F3.2 las conecta al disco.
         if (instruccion.isKernelMode()) {
             instruccionEjecutada = true;
             cpu.setMode(CpuMode.KERNEL);
@@ -331,33 +319,6 @@ public class Computer implements ClockListener {
                 + " | PC: " + procesoActual.getProgramCounter()
             );
 
-            boolean bloqueado = false;
-
-            if (instruccion.getType() == InstructionType.SEM_WAIT
-                    || instruccion.getType() == InstructionType.SEM_SIGNAL
-                    || instruccion.getType() == InstructionType.APPEND
-                    || instruccion.getType() == InstructionType.TAKE) {
-
-                if (syncExecutor == null) {
-                    throw new IllegalStateException(
-                        "No se ha conectado SyncExecutor al computador H" + id
-                    );
-                }
-
-                bloqueado = syncExecutor.execute(
-                    procesoActual,
-                    instruccion,
-                    ciclo
-                );
-            }
-
-            if (bloqueado) {
-                cpu.releaseProcess();
-                cyclesCPU = 0;
-                return;
-            }
-
-            cpu.setMode(CpuMode.USER);
             cyclesCPU++;
         }
          else {

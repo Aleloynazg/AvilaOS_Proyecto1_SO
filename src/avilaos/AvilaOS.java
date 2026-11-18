@@ -22,11 +22,11 @@ public class AvilaOS {
                 }
 
                 try {
-                    // 2. El sistema (lógica): clúster, reloj, buffers y procesos iniciales
+                    // 2. El sistema (lógica): computador, reloj y procesos iniciales
                     SimulationFactory.Simulation simulation = SimulationFactory.create(config);
 
                     // 3. La ventana (observa al sistema)
-                    new MainWindow(simulation.clock, simulation.cluster).setVisible(true);
+                    new MainWindow(simulation.clock, simulation.computer).setVisible(true);
                     return;
                 } catch (IllegalArgumentException ex) {
                     JOptionPane.showMessageDialog(null, ex.getMessage(),

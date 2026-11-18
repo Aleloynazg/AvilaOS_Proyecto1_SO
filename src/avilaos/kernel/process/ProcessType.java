@@ -4,8 +4,6 @@ package avilaos.kernel.process;
 public enum ProcessType {
     CPU_BOUND("CPU bound"),
     IO_BOUND("I/O bound"),
-    PRODUCER("Productor"),
-    CONSUMER("Consumidor"),
     FILE_IO("Operaciones del sistema de archivos");
     
 

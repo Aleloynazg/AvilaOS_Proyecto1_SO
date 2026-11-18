@@ -27,9 +27,6 @@ public class Kernel {
     /** Quienes escuchan los eventos (el log de la GUI, las métricas). */
     private final LinkedQueue<SystemEventListener> listeners = new LinkedQueue<>();
     
-        /** Saca de su semáforo a un proceso que se termina mientras espera (F3.7). */
-    private SemaphoreWaitCanceller waitCanceller;
-
     public Kernel(int computerId, MemoryManager memory) {
         this.computerId = computerId;
         this.memory = memory;
@@ -101,27 +98,12 @@ public class Kernel {
     }
 }
     
-    /** Suma un ciclo a cada proceso bloqueado esperando en un semáforo (métrica de productor-consumidor). */
-    public void contarTiempoBloqueoSemaforos() {
-        Object[] blocked = blockedQueue.toArray();
-        for (Object o : blocked) {
-            PCB p = (PCB) o;
-            if (isWaitingOnSemaphore(p)) {
-                p.incrementCyclesBlockedOnSemaphores();
-            }
-        }
-    }
-
     /**
      * Termina un proceso: lo saca de la cola donde esté, libera su memoria
      * (si la tenía) y revisa si ahora cabe alguno de Nuevos.
      * Si el proceso estaba en la CPU, la persona A lo saca de la CPU antes.
      */
  public void terminateProcess(PCB process, TerminationCause cause, long cycle) {
-    if (waitCanceller != null && isWaitingOnSemaphore(process)) {
-            waitCanceller.cancelWait(process);
-        }
-    
     boolean hadMemory = process.getState() != ProcessState.NEW;
 
     newQueue.remove(process);
@@ -162,21 +144,7 @@ public class Kernel {
     admitNewProcesses(cycle);
 }
 
-    /** ¿El proceso está bloqueado esperando en un semáforo (s, n o e)? */
-    private boolean isWaitingOnSemaphore(PCB process) {
-        if (process.getState() != ProcessState.BLOCKED) {
-            return false;
-        }
-        BlockReason r = process.getBlockReason();
-        return r == BlockReason.SEM_EMPTY || r == BlockReason.SEM_FULL || r == BlockReason.SEM_MUTEX;
-    }
-
-    /** Lo registra el SyncExecutor para que los procesos terminados salgan de los semáforos. */
-    public void setWaitCanceller(SemaphoreWaitCanceller canceller) {
-        this.waitCanceller = canceller;
-    }
-    
-    /** Un proceso se bloquea. cycles = cuánto dura (E/S, red); 0 si espera un semáforo. */
+    /** Un proceso se bloquea. cycles = cuánto dura (E/S); 0 si espera un evento sin tiempo fijo. */
     public void blockProcess(PCB process, BlockReason reason, int cycles, long cycle) {
         process.block(reason, cycles);
         blockedQueue.enqueue(process);
@@ -192,13 +160,13 @@ public class Kernel {
         }
     }
 
-    /** Resta un ciclo a los bloqueos con tiempo (E/S y red) y despierta a los que terminan. */
+    /** Resta un ciclo a los bloqueos con tiempo (E/S) y despierta a los que terminan. */
     public void tickTimedBlocks(long cycle) {
         Object[] blocked = blockedQueue.toArray();
         for (Object o : blocked) {
             PCB p = (PCB) o;
             BlockReason reason = p.getBlockReason();
-            if (reason == BlockReason.IO || reason == BlockReason.NETWORK) {
+            if (reason == BlockReason.IO) {
                 p.decrementBlockedCycles();
                 if (p.getBlockedCyclesLeft() == 0) {
                     unblockProcess(p, cycle);

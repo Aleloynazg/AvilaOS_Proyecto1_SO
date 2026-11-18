@@ -31,7 +31,7 @@ import javax.swing.ListSelectionModel;
 
 /**
  * Panel de UN computador. Solo OBSERVA al Computer: lee su estado y lo dibuja.
- * Se reutiliza: un panel por cada computador del clúster.
+ * Panel con el estado del computador: CPU, colas y memoria.
  */
 
 public class ComputerPanel extends JPanel {
@@ -340,14 +340,6 @@ public class ComputerPanel extends JPanel {
         switch (reason) {
             case IO:
                 return "E/S";
-            case SEM_EMPTY:
-                return "sem e: lleno";
-            case SEM_FULL:
-                return "sem n: vacío";
-            case SEM_MUTEX:
-                return "sem s: mutex";
-            case NETWORK:
-                return "red remota";
             default:
                 return reason.getLabel();
         }
