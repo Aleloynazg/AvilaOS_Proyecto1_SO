@@ -33,11 +33,18 @@ public class Disk implements ClockListener{
     private int lookCompleted;
     private DiskPolicyType currentPolicyType;
 
-    private static final int TOTAL_BLOCKS = 300;
-    private static final int FILE_SYSTEM_START = 0;
-    private static final int FILE_SYSTEM_END = 199;
-    private static final int SWAP_START = 200;
-    private static final int SWAP_END = 299;
+    /** Tamaños por defecto: los del JSON de ejemplo del enunciado. */
+    public static final int DEFAULT_FILE_BLOCKS = 200;
+    public static final int DEFAULT_SWAP_BLOCKS = 100;
+
+    // Zonas del disco. Se calculan en el constructor a partir de
+    // totalBlocks (JSON del sistema de archivos) y swapSizeBlocks (JSON de procesos):
+    // archivos = 0 .. fileBlocks-1, swap = fileBlocks .. fileBlocks+swapBlocks-1.
+    private final int totalBlocks;
+    private final int fileSystemStart = 0;
+    private final int fileSystemEnd;
+    private final int swapStart;
+    private final int swapEnd;
 
     private DiskBlock[] blocks;
 
@@ -46,14 +53,33 @@ public class Disk implements ClockListener{
 
     private DiskScheduler scheduler;
 
+    /** Disco con los tamaños por defecto: 200 bloques de archivos y 100 de swap. */
     public Disk() {
+        this(DEFAULT_FILE_BLOCKS, DEFAULT_SWAP_BLOCKS);
+    }
 
-        blocks = new DiskBlock[TOTAL_BLOCKS];
-
-        for (int i = 0; i < TOTAL_BLOCKS; i++) {
-            blocks[i] = new DiskBlock(i);
+    /**
+     * Crea un disco con una zona de archivos y una zona de intercambio.
+     *
+     * @param fileBlocks bloques para archivos (totalBlocks del JSON), al menos 1
+     * @param swapBlocks bloques de swap (swapSizeBlocks del JSON), 0 o más
+     */
+    public Disk(int fileBlocks, int swapBlocks) {
+        if (fileBlocks < 1) {
+            throw new IllegalArgumentException("El disco necesita al menos 1 bloque para archivos");
         }
+        if (swapBlocks < 0) {
+            throw new IllegalArgumentException("El área de intercambio no puede ser negativa");
+        }
+        this.totalBlocks = fileBlocks + swapBlocks;
+        this.fileSystemEnd = fileBlocks - 1;
+        this.swapStart = fileBlocks;
+        this.swapEnd = totalBlocks - 1;
 
+        blocks = new DiskBlock[totalBlocks];
+        for (int i = 0; i < totalBlocks; i++) {
+            blocks[i] = new DiskBlock(i, i >= swapStart);
+        }
         currentHead = 0;
         headDirection = HeadDirection.UP;
     }
@@ -79,7 +105,7 @@ public class Disk implements ClockListener{
      */
     public int allocateFileBlocks(PCB process, int numberOfBlocks) {
         return allocateBlocks(process, numberOfBlocks,
-                FILE_SYSTEM_START, FILE_SYSTEM_END);
+                fileSystemStart, fileSystemEnd);
     }
 
     /**
@@ -87,7 +113,7 @@ public class Disk implements ClockListener{
      */
     public int allocateSwapBlocks(PCB process, int numberOfBlocks) {
         return allocateBlocks(process, numberOfBlocks,
-                SWAP_START, SWAP_END);
+                swapStart, swapEnd);
     }
 
     /**
@@ -134,7 +160,7 @@ public class Disk implements ClockListener{
 
         if (process == null || numberOfBlocks <= 0
                 || firstBlock < 0
-                || firstBlock + numberOfBlocks > TOTAL_BLOCKS) {
+                || firstBlock + numberOfBlocks > totalBlocks) {
             return;
         }
 
@@ -156,7 +182,7 @@ public class Disk implements ClockListener{
             return;
         }
 
-        for (int i = 0; i < TOTAL_BLOCKS; i++) {
+        for (int i = 0; i < totalBlocks; i++) {
 
             if (blocks[i].getOwner() == process) {
                 blocks[i].setOwner(null);
@@ -168,14 +194,14 @@ public class Disk implements ClockListener{
      * Cuenta los bloques libres para archivos.
      */
     public int countFreeFileBlocks() {
-        return countFreeBlocks(FILE_SYSTEM_START, FILE_SYSTEM_END);
+        return countFreeBlocks(fileSystemStart, fileSystemEnd);
     }
 
     /**
      * Cuenta los bloques libres para swap.
      */
     public int countFreeSwapBlocks() {
-        return countFreeBlocks(SWAP_START, SWAP_END);
+        return countFreeBlocks(swapStart, swapEnd);
     }
 
     private int countFreeBlocks(int start, int end) {
@@ -196,7 +222,7 @@ public class Disk implements ClockListener{
     private void moveHead(HeadDirection direction) {
 
         if (direction == HeadDirection.UP
-                && currentHead < TOTAL_BLOCKS - 1) {
+                && currentHead < totalBlocks - 1) {
 
             currentHead++;
             totalHeadMovement++;
@@ -287,7 +313,7 @@ public class Disk implements ClockListener{
         if (changingDirection) {
 
             if (headDirection == HeadDirection.UP
-                    && currentHead == TOTAL_BLOCKS - 1) {
+                    && currentHead == totalBlocks - 1) {
 
                 headDirection = scheduler.getNextDirection();
                 changingDirection = false;
@@ -334,7 +360,7 @@ public class Disk implements ClockListener{
 
         // Si el cabezal todavía no llegó al extremo.
         if (headDirection == HeadDirection.UP
-                && currentHead < TOTAL_BLOCKS - 1) {
+                && currentHead < totalBlocks - 1) {
 
             moveHead(HeadDirection.UP);
             return;
@@ -351,7 +377,7 @@ public class Disk implements ClockListener{
         if (headDirection == HeadDirection.UP) {
             currentHead = 0;
         } else {
-            currentHead = TOTAL_BLOCKS - 1;
+            currentHead = totalBlocks - 1;
         }
 
         circularMovement = false;
@@ -407,7 +433,7 @@ public class Disk implements ClockListener{
 
     public DiskBlock getBlock(int blockNumber) {
 
-        if (blockNumber < 0 || blockNumber >= TOTAL_BLOCKS) {
+        if (blockNumber < 0 || blockNumber >= totalBlocks) {
             return null;
         }
 
@@ -415,7 +441,27 @@ public class Disk implements ClockListener{
     }
 
     public int getTotalBlocks() {
-        return TOTAL_BLOCKS;
+        return totalBlocks;
+    }
+
+    /** Número del último bloque del disco: SCAN y C-SCAN llegan hasta él. */
+    public int getLastBlock() {
+        return totalBlocks - 1;
+    }
+
+    /** Cantidad de bloques de la zona de archivos. */
+    public int getFileBlockCount() {
+        return fileSystemEnd + 1;
+    }
+
+    /** Cantidad de bloques del área de intercambio. */
+    public int getSwapBlockCount() {
+        return swapEnd - swapStart + 1;
+    }
+
+    /** Primer bloque del área de intercambio. */
+    public int getSwapStart() {
+        return swapStart;
     }
 
     public int getCurrentHead() {
@@ -424,7 +470,7 @@ public class Disk implements ClockListener{
 
     public void setCurrentHead(int currentHead) {
 
-        if (currentHead >= 0 && currentHead < TOTAL_BLOCKS) {
+        if (currentHead >= 0 && currentHead < totalBlocks) {
             this.currentHead = currentHead;
         }
     }
