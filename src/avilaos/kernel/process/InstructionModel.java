@@ -7,9 +7,6 @@ package avilaos.kernel.process;
  */
 public final class InstructionModel {
 
-    /** Instrucciones por elemento de un productor/consumidor, sin contar producir/consumir. */
-    public static final int SYNC_STEPS = 5;
-
     private InstructionModel() { }
 
     /** La próxima instrucción que ejecutará el proceso. */
@@ -18,10 +15,6 @@ public final class InstructionModel {
         switch (p.getType()) {
             case IO_BOUND:
                 return nextIoBound(p, n);
-            case PRODUCER:
-                return nextProducer(p, n);
-            case CONSUMER:
-                return nextConsumer(p, n);
             default:
                 return new Instruction(InstructionType.NORMAL);
         }
@@ -36,35 +29,5 @@ public final class InstructionModel {
             return new Instruction(InstructionType.IO_REQUEST);
         }
         return new Instruction(InstructionType.NORMAL);
-    }
-
-    /** Producir (k ciclos) → wait(e) → wait(s) → append → signal(s) → signal(n). */
-    private static Instruction nextProducer(PCB p, int n) {
-        int k = p.getCyclesPerItem();
-        int step = n % (k + SYNC_STEPS);
-        if (step < k) {
-            return new Instruction(InstructionType.PRODUCE);
-        }
-        switch (step - k) {
-            case 0: return new Instruction(InstructionType.SEM_WAIT, BufferSemaphore.EMPTY);
-            case 1: return new Instruction(InstructionType.SEM_WAIT, BufferSemaphore.MUTEX);
-            case 2: return new Instruction(InstructionType.APPEND);
-            case 3: return new Instruction(InstructionType.SEM_SIGNAL, BufferSemaphore.MUTEX);
-            default: return new Instruction(InstructionType.SEM_SIGNAL, BufferSemaphore.FULL);
-        }
-    }
-
-    /** wait(n) → wait(s) → take → signal(s) → signal(e) → consumir (k ciclos). */
-    private static Instruction nextConsumer(PCB p, int n) {
-        int k = p.getCyclesPerItem();
-        int step = n % (k + SYNC_STEPS);
-        switch (step) {
-            case 0: return new Instruction(InstructionType.SEM_WAIT, BufferSemaphore.FULL);
-            case 1: return new Instruction(InstructionType.SEM_WAIT, BufferSemaphore.MUTEX);
-            case 2: return new Instruction(InstructionType.TAKE);
-            case 3: return new Instruction(InstructionType.SEM_SIGNAL, BufferSemaphore.MUTEX);
-            case 4: return new Instruction(InstructionType.SEM_SIGNAL, BufferSemaphore.EMPTY);
-            default: return new Instruction(InstructionType.CONSUME);
-        }
     }
 }

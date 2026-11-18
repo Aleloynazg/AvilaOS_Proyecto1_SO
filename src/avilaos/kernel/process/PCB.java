@@ -18,7 +18,7 @@ public class PCB {
     // ---- Estado y planificación ----
     private ProcessState state = ProcessState.NEW;
     private BlockReason blockReason = BlockReason.NONE;
-    private int blockedCyclesLeft;          // para IO y NETWORK
+    private int blockedCyclesLeft;          // para IO
     private TerminationCause terminationCause = TerminationCause.NONE;
     private final int priority;             // menor número = más prioridad
     private int deadline;                   // ciclos que le quedan antes de ser terminado
@@ -37,10 +37,6 @@ public class PCB {
     // ---- Parámetros por tipo ----
     private int ioEveryCycles;              // I/O bound: cada cuántas instrucciones pide E/S
     private int ioDurationCycles;           // I/O bound: cuánto dura la E/S
-    private int bufferId = -1;              // productor/consumidor: buffer con el que trabaja
-    private int cyclesPerItem;              // productor/consumidor: ciclos para producir/consumir
-    private int itemsToProcess;             // productor/consumidor: elementos para terminar
-    private int itemsProcessed;
 
     // ---- Métricas ----
     private long arrivalCycle = -1;
@@ -48,7 +44,6 @@ public class PCB {
     private long finishCycle = -1;
     private long cyclesOnCpu;
     private long cyclesWaitingReady;
-    private long cyclesBlockedOnSemaphores;
 
     public PCB(String name, int computerId, ProcessType type, int priority,
                int memoryRequired, int deadline, int totalInstructions) {
@@ -132,16 +127,11 @@ public class PCB {
     public int getCurrentStep() { return currentStep; }
     public int getIoEveryCycles() { return ioEveryCycles; }
     public int getIoDurationCycles() { return ioDurationCycles; }
-    public int getBufferId() { return bufferId; }
-    public int getCyclesPerItem() { return cyclesPerItem; }
-    public int getItemsToProcess() { return itemsToProcess; }
-    public int getItemsProcessed() { return itemsProcessed; }
     public long getArrivalCycle() { return arrivalCycle; }
     public long getFirstRunCycle() { return firstRunCycle; }
     public long getFinishCycle() { return finishCycle; }
     public long getCyclesOnCpu() { return cyclesOnCpu; }
     public long getCyclesWaitingReady() { return cyclesWaitingReady; }
-    public long getCyclesBlockedOnSemaphores() { return cyclesBlockedOnSemaphores; }
 
     // ---- Setters (solo lo que cambia durante la simulación) ----
 
@@ -152,17 +142,10 @@ public class PCB {
         this.ioEveryCycles = everyCycles;
         this.ioDurationCycles = durationCycles;
     }
-    public void setBufferParameters(int bufferId, int cyclesPerItem, int itemsToProcess) {
-        this.bufferId = bufferId;
-        this.cyclesPerItem = cyclesPerItem;
-        this.itemsToProcess = itemsToProcess;
-    }
-    public void incrementItemsProcessed() { itemsProcessed++; }
     public void setArrivalCycle(long cycle) { this.arrivalCycle = cycle; }
     public void markFirstRun(long cycle) { if (firstRunCycle < 0) firstRunCycle = cycle; }
     public void incrementCyclesOnCpu() { cyclesOnCpu++; }
     public void incrementCyclesWaitingReady() { cyclesWaitingReady++; }
-    public void incrementCyclesBlockedOnSemaphores() { cyclesBlockedOnSemaphores++; }
 
     @Override
     public String toString() {

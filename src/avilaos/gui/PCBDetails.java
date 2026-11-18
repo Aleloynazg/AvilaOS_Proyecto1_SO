@@ -48,14 +48,9 @@ public class PCBDetails extends JDialog {
     private final JLabel cicloFinalizacion = new JLabel();
     private final JLabel ciclosCPU = new JLabel();
     private final JLabel ciclosEspera = new JLabel();
-    private final JLabel ciclosSemaforos = new JLabel();
     private final JLabel ciclosBloqueo = new JLabel();
     private final JLabel frecuenciaIO = new JLabel();
     private final JLabel duracionIO = new JLabel();
-    private final JLabel buffer = new JLabel();
-    private final JLabel ciclosElemento = new JLabel();
-    private final JLabel elementosPendientes = new JLabel();
-    private final JLabel elementosProcesados = new JLabel();
 
     private final Timer actualizador;
 
@@ -93,14 +88,9 @@ public class PCBDetails extends JDialog {
         agregarCampo(contenido, "Ciclo de finalización:", cicloFinalizacion);
         agregarCampo(contenido, "Ciclos en CPU:", ciclosCPU);
         agregarCampo(contenido, "Ciclos esperando:", ciclosEspera);
-        agregarCampo(contenido, "Ciclos bloqueado por semáforos:", ciclosSemaforos);
         agregarCampo(contenido, "Ciclos de bloqueo restantes:", ciclosBloqueo);
         agregarCampo(contenido, "Frecuencia de E/S:", frecuenciaIO);
         agregarCampo(contenido, "Duración de E/S:", duracionIO);
-        agregarCampo(contenido, "ID del búfer:", buffer);
-        agregarCampo(contenido, "Ciclos por elemento:", ciclosElemento);
-        agregarCampo(contenido, "Elementos por procesar:", elementosPendientes);
-        agregarCampo(contenido, "Elementos procesados:", elementosProcesados);
 
         add(new JScrollPane(contenido), BorderLayout.CENTER);
 
@@ -155,8 +145,6 @@ public class PCBDetails extends JDialog {
         ciclosCPU.setText(String.valueOf(proceso.getCyclesOnCpu()));
         ciclosEspera.setText(
                 String.valueOf(proceso.getCyclesWaitingReady()));
-        ciclosSemaforos.setText(
-                String.valueOf(proceso.getCyclesBlockedOnSemaphores()));
         ciclosBloqueo.setText(
                 String.valueOf(proceso.getBlockedCyclesLeft()));
 
@@ -164,12 +152,5 @@ public class PCBDetails extends JDialog {
                 "Cada " + proceso.getIoEveryCycles() + " ciclos");
         duracionIO.setText(
                 proceso.getIoDurationCycles() + " ciclos");
-        buffer.setText(String.valueOf(proceso.getBufferId()));
-        ciclosElemento.setText(
-                String.valueOf(proceso.getCyclesPerItem()));
-        elementosPendientes.setText(
-                String.valueOf(proceso.getItemsToProcess()));
-        elementosProcesados.setText(
-                String.valueOf(proceso.getItemsProcessed()));
     }
 }
