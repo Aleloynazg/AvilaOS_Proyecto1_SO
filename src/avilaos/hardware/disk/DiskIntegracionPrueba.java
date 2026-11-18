@@ -93,18 +93,12 @@ public class DiskIntegracionPrueba {
         scheduler.addRequest(crearSolicitud(200, 1));
         scheduler.addRequest(crearSolicitud(50, 2));
 
-        DiskRequest first = disk.processNextRequest();
-        DiskRequest second = disk.processNextRequest();
+            avanzarDisco(disk, 400);
 
-        System.out.println("Primera solicitud: "
-                + first.getTargetBlock());
+     System.out.println("Posición final del cabezal: "
+             + disk.getCurrentHead());
 
-        System.out.println("Segunda solicitud: "
-                + second.getTargetBlock());
-
-        System.out.println("Posición final del cabezal: "
-                + disk.getCurrentHead());
-    }
+     mostrarMetricas(disk);}
 
     /**
      * Prueba la política SSTF.
@@ -122,13 +116,12 @@ public class DiskIntegracionPrueba {
         scheduler.addRequest(crearSolicitud(130, 2));
         scheduler.addRequest(crearSolicitud(200, 3));
 
-        DiskRequest request = disk.processNextRequest();
+        avanzarDisco(disk, 400);
 
-        System.out.println("Bloque seleccionado: "
-                + request.getTargetBlock());
-
-        System.out.println("Posición del cabezal: "
+        System.out.println("Posición final del cabezal: "
                 + disk.getCurrentHead());
+
+        mostrarMetricas(disk);
     }
 
     /**
@@ -146,28 +139,15 @@ public class DiskIntegracionPrueba {
         scheduler.addRequest(crearSolicitud(50, 1));
         scheduler.addRequest(crearSolicitud(200, 2));
 
-        DiskRequest first = disk.processNextRequest();
+        avanzarDisco(disk, 500);
 
-        System.out.println("Primera solicitud: "
-                + first.getTargetBlock());
-
-        DiskRequest second = disk.processNextRequest();
-
-        System.out.println("Solicitud durante el cambio de dirección: "
-                + second);
-
-        System.out.println("Posición del cabezal después del recorrido: "
+        System.out.println("Posición final del cabezal: "
                 + disk.getCurrentHead());
 
         System.out.println("Dirección actual: "
                 + disk.getHeadDirection());
 
-        DiskRequest third = disk.processNextRequest();
-
-        System.out.println("Siguiente solicitud: "
-                + (third == null ? "Ninguna"
-                        : third.getTargetBlock()));
-    }
+        mostrarMetricas(disk);}
 
     /**
      * Prueba la política C-SCAN.
@@ -180,28 +160,18 @@ public class DiskIntegracionPrueba {
         disk.setCurrentHead(100);
 
         DiskScheduler scheduler = diskScheduler(disk);
-
         scheduler.addRequest(crearSolicitud(50, 1));
         scheduler.addRequest(crearSolicitud(200, 2));
 
-        DiskRequest first = disk.processNextRequest();
+        avanzarDisco(disk, 400);
 
-        System.out.println("Primera solicitud: "
-                + first.getTargetBlock());
-
-        disk.processNextRequest();
-
-        System.out.println("Posición después del retorno circular: "
+        System.out.println("Posición final del cabezal: "
                 + disk.getCurrentHead());
 
         System.out.println("Dirección actual: "
                 + disk.getHeadDirection());
 
-        DiskRequest second = disk.processNextRequest();
-
-        System.out.println("Siguiente solicitud: "
-                + (second == null ? "Ninguna"
-                        : second.getTargetBlock()));
+        mostrarMetricas(disk);
     }
 
     /**
@@ -215,28 +185,18 @@ public class DiskIntegracionPrueba {
         disk.setCurrentHead(100);
 
         DiskScheduler scheduler = diskScheduler(disk);
-
         scheduler.addRequest(crearSolicitud(50, 1));
         scheduler.addRequest(crearSolicitud(200, 2));
 
-        DiskRequest first = disk.processNextRequest();
+        avanzarDisco(disk, 400);
 
-        System.out.println("Primera solicitud: "
-                + first.getTargetBlock());
-
-        disk.processNextRequest();
-
-        System.out.println("Posición después del cambio de dirección: "
+        System.out.println("Posición final del cabezal: "
                 + disk.getCurrentHead());
 
         System.out.println("Dirección actual: "
                 + disk.getHeadDirection());
 
-        DiskRequest second = disk.processNextRequest();
-
-        System.out.println("Siguiente solicitud: "
-                + (second == null ? "Ninguna"
-                        : second.getTargetBlock()));
+        mostrarMetricas(disk);
     }
 
     /**
@@ -245,4 +205,27 @@ public class DiskIntegracionPrueba {
     private static DiskScheduler diskScheduler(Disk disk) {
         return disk.getScheduler();
     }
+    private static void avanzarDisco(Disk disk, int ciclos) {
+
+    for (int ciclo = 1; ciclo <= ciclos; ciclo++) {
+        disk.onTick(ciclo);
+    }
+    
+}
+    private static void mostrarMetricas(Disk disk) {
+
+    System.out.println("Solicitudes completadas: "
+            + disk.getCompletedRequests());
+
+    System.out.println("Desplazamiento total: "
+            + disk.getTotalHeadMovement());
+
+    System.out.println("Tiempo promedio de espera: "
+            + disk.getAverageWaitingTime());
+    System.out.println("Solicitudes FIFO: " + disk.getFifoCompleted());
+System.out.println("Solicitudes SSTF: " + disk.getSstfCompleted());
+System.out.println("Solicitudes SCAN: " + disk.getScanCompleted());
+System.out.println("Solicitudes C-SCAN: " + disk.getCscanCompleted());
+System.out.println("Solicitudes LOOK: " + disk.getLookCompleted());
+}
 }
