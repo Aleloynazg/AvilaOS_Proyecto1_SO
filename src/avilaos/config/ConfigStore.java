@@ -80,4 +80,44 @@ public final class ConfigStore {
     public static String toJson(FileSystemConfig config) {
         return GSON.toJson(config);
     }
+
+    /**
+     * Lee y valida el JSON de procesos y configuración (formato del enunciado).
+     *
+     * @throws IOException si no se puede leer el archivo
+     * @throws IllegalArgumentException si el JSON está mal formado o tiene valores inválidos
+     */
+    public static ProcessesConfig loadProcesses(File file) throws IOException {
+        String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        ProcessesConfig config = parseProcesses(text);
+        config.validate();
+        return config;
+    }
+
+    /** Convierte el texto de un JSON de procesos en su configuración (sin validar). */
+    public static ProcessesConfig parseProcesses(String text) {
+        ProcessesConfig config;
+        try {
+            config = GSON.fromJson(text, ProcessesConfig.class);
+        } catch (JsonParseException e) {
+            String detalle = e.getCause() != null && e.getCause().getMessage() != null
+                    ? e.getCause().getMessage() : e.getMessage();
+            throw new IllegalArgumentException("El archivo de procesos no es un JSON válido: " + detalle);
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("El archivo de procesos está vacío");
+        }
+        return config;
+    }
+
+    /** Guarda procesos y configuración en el formato del enunciado. */
+    public static void saveProcesses(ProcessesConfig config, File file) throws IOException {
+        config.validate();
+        Files.writeString(file.toPath(), toJson(config), StandardCharsets.UTF_8);
+    }
+
+    /** Texto JSON (con sangría) de procesos y configuración. */
+    public static String toJson(ProcessesConfig config) {
+        return GSON.toJson(config);
+    }
 }

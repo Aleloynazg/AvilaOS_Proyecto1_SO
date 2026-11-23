@@ -2,6 +2,10 @@ package avilaos.config;
 
 import avilaos.hardware.Computer;
 import avilaos.hardware.GlobalClock;
+import avilaos.hardware.disk.Disk;
+import avilaos.kernel.fs.NodeType;
+import avilaos.kernel.fs.Permission;
+import avilaos.kernel.process.IoOperation;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessFactory;
 import avilaos.kernel.process.ProcessType;
@@ -45,6 +49,104 @@ public final class SimulationFactory {
             computer.getKernel().submitProcess(pcb, 0);
         }
         return new Simulation(computer, clock);
+    }
+
+    /**
+     * Arma el sistema del Proyecto 2 a partir de los DOS JSON del enunciado: el de procesos
+     * y configuración, y el del sistema de archivos. Los dos son obligatorios.
+     *
+     * El disco tiene totalBlocks bloques para archivos (JSON del sistema de archivos) más
+     * swapSizeBlocks de intercambio (JSON de procesos); el cabezal empieza en initialHead.
+     *
+     * @throws IllegalArgumentException si falta alguno de los dos o alguno es inválido
+     */
+    public static Simulation createP2(ProcessesConfig processes, FileSystemConfig fileSystem) {
+        if (processes == null) {
+            throw new IllegalArgumentException("Falta cargar el archivo de procesos y configuración");
+        }
+        if (fileSystem == null) {
+            throw new IllegalArgumentException("Falta cargar el archivo del sistema de archivos");
+        }
+        processes.validate();
+        fileSystem.validate();
+
+        int swap = processes.globalConfig.swapSizeBlocks;
+        int physicalBlocks = fileSystem.diskConfig.totalBlocks + swap;
+        if (fileSystem.diskConfig.initialHead >= physicalBlocks) {
+            throw new IllegalArgumentException("El campo 'initialHead' (" + fileSystem.diskConfig.initialHead
+                    + ") queda fuera del disco, que tiene " + physicalBlocks + " bloques (0 a "
+                    + (physicalBlocks - 1) + ")");
+        }
+
+        Disk disk = new Disk(fileSystem.diskConfig.totalBlocks, swap);
+        disk.setCurrentHead(fileSystem.diskConfig.initialHead);
+
+        Computer computer = new Computer(COMPUTER_ID, processes.computer.ramCapacity, disk);
+        GlobalClock clock = new GlobalClock(processes.globalConfig.cycleDurationMs);
+        computer.conectarReloj(clock);
+        computer.setPolicy(PolicyFactory.create(
+                ProcessesConfig.parseSchedulingPolicy(processes.computer.policy), processes.computer.quantum));
+        computer.setDiskPolicy(ProcessesConfig.parseDiskPolicy(processes.globalConfig.initialDiskPolicy));
+
+        fileSystem.populate(computer.getFileSystem());
+
+        PCB[] created = processes.createProcesses(COMPUTER_ID);
+        for (int i = 0; i < created.length; i++) {
+            computer.getKernel().submitProcess(created[i], 0);
+        }
+        return new Simulation(computer, clock);
+    }
+
+    /**
+     * Describe el sistema actual en el formato del JSON de procesos del enunciado (ciclo,
+     * swap, política de disco en uso, computador y todos los procesos creados). El estado
+     * del sistema de archivos se guarda aparte con {@link FileSystemConfig#fromState}.
+     */
+    public static ProcessesConfig describeProcesses(Computer computer, GlobalClock clock) {
+        ProcessesConfig config = ProcessesConfig.defaults();
+        config.globalConfig.cycleDurationMs = clock.getCycleDuration();
+        config.globalConfig.swapSizeBlocks = computer.getDisk().getSwapBlockCount();
+        config.globalConfig.initialDiskPolicy = computer.getDiskPolicyType().getLabel();
+        config.computer.ramCapacity = computer.getMemoryManager().getTotalMemory();
+        config.computer.policy = computer.getPolicy().getType().name();
+        config.computer.quantum = computer.getPolicy() instanceof RoundRobinPolicy
+                ? ((RoundRobinPolicy) computer.getPolicy()).getQuantum() : 0;
+
+        PCB[] all = collectProcesses(computer);
+        config.processes = new ProcessesConfig.ProcessEntry[all.length];
+        for (int i = 0; i < all.length; i++) {
+            PCB p = all[i];
+            ProcessesConfig.ProcessEntry e = new ProcessesConfig.ProcessEntry();
+            e.name = p.getName();
+            e.memory = p.getMemoryRequired();
+            e.deadline = p.getInitialDeadline();
+            e.instructions = p.getTotalInstructions();
+            e.priority = p.getPriority();
+            if (p.getType() == ProcessType.FILE_IO) {
+                // Sin "type": es el valor por defecto y así el archivo queda como el del enunciado.
+                if (p.getIoOperation() != null) {
+                    e.operation = p.getIoOperation().name();
+                }
+                e.targetPath = p.getTargetPath();
+                e.newName = p.getNewName();
+                if (p.getIoOperation() == IoOperation.CREATE) {
+                    e.targetType = p.getTargetType().name();
+                    if (p.getTargetType() == NodeType.FILE) {
+                        e.blocks = p.getFileBlocks();
+                    }
+                    e.owner = p.getIoOwner();
+                    e.permissions = p.getIoPermission() == Permission.PRIVATE ? "private" : "public";
+                }
+            } else {
+                e.type = p.getType().name();
+                if (p.getType() == ProcessType.IO_BOUND) {
+                    e.ioEvery = p.getIoEveryCycles();
+                    e.ioDuration = p.getIoDurationCycles();
+                }
+            }
+            config.processes[i] = e;
+        }
+        return config;
     }
 
     private static PCB createProcess(SimulationConfig.ProcessConfig p) {
