@@ -147,3 +147,34 @@ Las métricas globales se calculan sumando los contadores de todos los computado
 **- Si no hay memoria RAM suficiente para admitir un proceso, se selecciona primero un proceso bloqueado como candidato a suspensión. Entre los candidatos se selecciona el de menor prioridad; si hay empate, se elige el que lleve más tiempo bloqueado. Si no hay procesos bloqueados, el nuevo proceso permanece en la cola de Nuevos.**
 
 **- Cuando se libera memoria, se prioriza la reactivación de procesos suspendidos que estén listos, antes de admitir procesos nuevos. La memoria necesaria para reactivar un proceso se reserva al generar la solicitud RESUME. Si la operación falla, se libera la reserva.**
+
+## 12. Decisiones de implementación del Proyecto 2
+
+Decisiones que se tomaron al implementar las fases 1 a 4 (PR #83 a #96) y que completan las secciones anteriores. Las marcadas con **(confirmar)** esperan el visto bueno del equipo.
+
+### 12.1 Archivos y E/S de archivos
+
+| Tema | Decisión |
+| --- | --- |
+| Costo de una solicitud de archivos | READ y CREATE de un archivo cuestan tantos bloques como tiene el archivo. UPDATE y DELETE cuestan 1 bloque (solo cambia la entrada del directorio). |
+| Operaciones sobre un directorio | Los directorios no ocupan bloques propios. La solicitud va al primer bloque del primer archivo que contienen, o al bloque 0 (tabla del sistema de archivos) si están vacíos o se están creando. Costo: 1 bloque. |
+| UPDATE sin nombre nuevo | El kernel agrega `_v2` antes de la extensión: `notas.txt` pasa a `notas_v2.txt` y `datos` pasa a `datos_v2`. |
+| Permisos | Se validan al crear el proceso (la interfaz lo impide y explica el motivo con `Computer.checkFileOperation`). El kernel valida que la operación sea posible (la ruta existe, hay bloques, el nombre es válido) al generar la solicitud y otra vez cuando el disco la termina. |
+| Operación imposible | El proceso termina con causa `IO_FAILED` y el log explica el motivo. La simulación sigue. |
+| Proceso muerto con solicitud en cola | La solicitud se cancela y se liberan los bloques que había reservado un CREATE. Si el disco ya la estaba atendiendo, la descarta al terminar. |
+| SCAN y C-SCAN | Barren hasta el último bloque físico del disco (el 299 con los valores por defecto, que incluye el swap), no solo hasta el último bloque de archivos. |
+| Campos opcionales del JSON de procesos | `priority` (por defecto 5), `type` (por defecto `FILE_IO`), `blocks`, `newName`, `owner` y, en `globalConfig`, `headSpeed` e `initialDirection`, como indica `plan.txt`. Un archivo sin esos campos es válido y se parece al del enunciado. |
+| Velocidad del cabezal contra el deadline del enunciado **(confirmar)** | Los 8 procesos del enunciado traen deadline 500 y el JSON no trae `headSpeed`. Con el valor por defecto (1 posición por ciclo) solo el desplazamiento de FIFO ya son 644 ciclos y los últimos procesos mueren por deadline. Con `headSpeed` 5 o más terminan los 8. Hay que decidir qué valor usar en la defensa (`IntegracionP2Prueba`, prueba 3, deja la tabla). |
+
+### 12.2 Siete estados, swap y planificador a mediano plazo
+
+| Tema | Decisión |
+| --- | --- |
+| Memoria de cada estado | Nuevo, Terminado y los dos suspendidos no ocupan RAM. Un proceso que se está suspendiendo (su SUSPEND espera al disco) todavía la ocupa; uno que se está reactivando ya la tiene reservada. |
+| Espacio en el swap | 1 bloque por cada MB de memoria del proceso, en bloques consecutivos. Se reserva al generar la solicitud SUSPEND y se libera al reactivar al proceso o al terminar. El costo en disco de SUSPEND y RESUME es ese mismo número de bloques. |
+| A quién se suspende | Solo a Bloqueados (nunca Listos ni en Ejecución), con el criterio de la sección 11. Si el swap no tiene espacio consecutivo para esa víctima se prueba con la siguiente. Si ni suspendiendo a todos los Bloqueados cabría el Nuevo, no se suspende a nadie. |
+| Mientras se suspende | El proceso sigue en la RAM hasta que el disco termina de escribir. Si su espera termina antes pasa a Listo suspendido (sigue en tránsito). Si muere, su RAM, su swap y la RAM pendiente se liberan una sola vez. |
+| Estando suspendido | El tiempo sigue corriendo: la E/S con tiempo y el deadline se siguen descontando. Un Bloqueado suspendido que termina su espera pasa a Listo suspendido, no a Listo. Si se vence el deadline, el proceso termina. |
+| Reactivación | Solo se reactivan Listos suspendidos, de mayor a menor prioridad, y se detiene en el primero que no cabe (como la admisión de Nuevos). Un Bloqueado suspendido primero debe despertar. |
+| Excepción a "reactivar antes de admitir Nuevos" **(confirmar)** | Mientras haya suspensiones en curso no se reactiva a nadie, y al terminar la última se admite primero al Nuevo que las provocó. Si no, el primer suspendido que despertara volvería enseguida, se llevaría la RAM y el Nuevo no entraría nunca (visto en `SuspensionPrueba`: más de 500 ciclos de espera). |
+| Contadores | El kernel cuenta las suspensiones y las reactivaciones completadas (`getSuspensionCount`, `getReactivationCount`). |
