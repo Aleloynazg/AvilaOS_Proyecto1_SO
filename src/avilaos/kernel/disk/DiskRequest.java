@@ -5,6 +5,7 @@
 package avilaos.kernel.disk;
 import avilaos.kernel.process.IoOperation;
 import avilaos.kernel.process.PCB;
+import avilaos.kernel.fs.FsNode;
 import avilaos.kernel.fs.Permission;
 
 /**
@@ -24,6 +25,12 @@ public class DiskRequest {
     private final String newName;
     private final String owner;
     private final Permission permission;
+
+    /**
+     * CREATE de un archivo: el elemento que se reservó al generar la solicitud (los bloques ya
+     * están asignados). Si la solicitud falla o se cancela, el kernel lo libera.
+     */
+    private FsNode reservedNode;
 
     /**
      * Construye una solicitud de entrada/salida.
@@ -47,6 +54,14 @@ public class DiskRequest {
 
     public PCB getProcess() {
         return process;
+    }
+
+    public FsNode getReservedNode() {
+        return reservedNode;
+    }
+
+    public void setReservedNode(FsNode reservedNode) {
+        this.reservedNode = reservedNode;
     }
 
     public IoOperation getOperation() {

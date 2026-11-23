@@ -3,8 +3,11 @@ package avilaos.hardware;
 import avilaos.hardware.disk.Disk;
 import avilaos.kernel.Kernel;
 import avilaos.kernel.disk.DiskPolicyType;
+import avilaos.kernel.disk.DiskRequest;
 import avilaos.kernel.fs.FileEntry;
+import avilaos.kernel.fs.FileIoManager;
 import avilaos.kernel.fs.FileSystem;
+import avilaos.kernel.fs.FileSystemException;
 import avilaos.kernel.fs.FsNode;
 import avilaos.kernel.fs.NodeType;
 import avilaos.kernel.fs.Permission;
@@ -36,6 +39,8 @@ public class ComputerArchivosPrueba {
         operacionesInvalidas();
         revalidacionAlTerminar();
         deadlineCancelaSolicitud();
+        createReservaYSeLibera();
+        reservaConElGestorDeArchivos();
         procesoDeUnaInstruccion();
         cambioDePoliticaEnMarcha();
         modoUsuarioYKernelSinDisco();
@@ -102,6 +107,12 @@ public class ComputerArchivosPrueba {
         for (PCB p : todos) {
             c.getKernel().submitProcess(p, 0);
         }
+        while (cycle < 200 && crear.getState() != ProcessState.BLOCKED) {
+            step(c);
+        }
+        check("CREATE reserva los bloques al generar la solicitud: el archivo ya está en el árbol y el disco aún no terminó",
+                fs.findByPath("/usuarios/tesis.pdf") != null && c.getDisk().getCompletedRequests() == 0
+                        && c.getDisk().countFreeFileBlocks() == libresAntes - 7);
         runUntilAllTerminated(c, todos, 2000);
 
         boolean todosCompleted = true;
@@ -210,6 +221,95 @@ public class ComputerArchivosPrueba {
                 !c.getDiskScheduler().hasRequests() && c.getDisk().getCompletedRequests() == 1);
         check("notas.txt sigue existiendo (el DELETE nunca se hizo)",
                 c.getFileSystem().findByPath("/usuarios/notas.txt") != null);
+    }
+
+    private static void createReservaYSeLibera() {
+        System.out.println("--- 5b. CREATE reserva bloques distintos; si el proceso muere, se liberan ---");
+        Computer c = nuevoComputador();
+        int libresAntes = c.getDisk().countFreeFileBlocks();
+        PCB lento = ProcessFactory.fileIo("Lento", 1, 5, 16, 900, 2, IoOperation.READ, "/usuarios/video.mp4");
+        PCB a = ProcessFactory.fileIo("A", 1, 5, 16, 900, 2, IoOperation.CREATE, "/usuarios/a.bin",
+                null, NodeType.FILE, 3, "admin", Permission.PUBLIC);
+        PCB b = ProcessFactory.fileIo("B", 1, 5, 16, 900, 2, IoOperation.CREATE, "/usuarios/b.bin",
+                null, NodeType.FILE, 3, "admin", Permission.PUBLIC);
+        PCB impaciente = ProcessFactory.fileIo("Impaciente", 1, 5, 16, 40, 2, IoOperation.CREATE,
+                "/usuarios/c.bin", null, NodeType.FILE, 20, "admin", Permission.PUBLIC);
+        PCB[] todos = {lento, a, b, impaciente};
+        for (PCB p : todos) {
+            c.getKernel().submitProcess(p, 0);
+        }
+        while (cycle < 100 && impaciente.getState() != ProcessState.BLOCKED) {
+            step(c);
+        }
+        Object[] enCola = c.getDiskScheduler().getRequests();
+        boolean distintos = enCola.length == 3
+                && ((DiskRequest) enCola[0]).getTargetBlock() == 0
+                && ((DiskRequest) enCola[1]).getTargetBlock() == 3
+                && ((DiskRequest) enCola[2]).getTargetBlock() == 6;
+        check("las 3 solicitudes CREATE en cola apuntan a bloques distintos (0, 3 y 6)", distintos);
+        check("los 26 bloques ya están reservados", c.getDisk().countFreeFileBlocks() == libresAntes - 26);
+
+        runUntilAllTerminated(c, todos, 1000);
+        check("el impaciente murió por deadline", impaciente.getTerminationCause() == TerminationCause.DEADLINE_MISSED);
+        check("su archivo se eliminó y sus 20 bloques quedaron libres",
+                c.getFileSystem().findByPath("/usuarios/c.bin") == null
+                        && c.getDisk().countFreeFileBlocks() == libresAntes - 6);
+        check("el log cuenta que se liberaron los bloques reservados",
+                log.indexOf("se liberan los 20 bloques reservados para /usuarios/c.bin") >= 0);
+        check("A y B completaron y sus archivos están en los bloques reservados",
+                a.getTerminationCause() == TerminationCause.COMPLETED
+                        && b.getTerminationCause() == TerminationCause.COMPLETED
+                        && c.getFileSystem().findByPath("/usuarios/a.bin").getFirstBlock() == 0
+                        && c.getFileSystem().findByPath("/usuarios/b.bin").getFirstBlock() == 3);
+    }
+
+    private static void reservaConElGestorDeArchivos() {
+        System.out.println("--- 5c. FileIoManager: reservar, confirmar y liberar ---");
+        FileSystem fs = new FileSystem(new Disk(200, 100));
+        fs.createDirectory("/d", "admin", Permission.PUBLIC);
+        FileIoManager io = new FileIoManager(fs);
+        int libres = fs.getDisk().countFreeFileBlocks();
+
+        PCB p = ProcessFactory.fileIo("X", 1, 5, 16, 900, 2, IoOperation.CREATE, "/d/x.bin",
+                null, NodeType.FILE, 5, "admin", Permission.PUBLIC);
+        DiskRequest r = io.buildRequest(p, 1);
+        check("buildRequest reserva el archivo: está en el árbol, empieza en el bloque 0 y pide 5 bloques",
+                r.getReservedNode() != null && fs.findByPath("/d/x.bin") == r.getReservedNode()
+                        && r.getTargetBlock() == 0 && r.getBlockCount() == 5
+                        && fs.getDisk().countFreeFileBlocks() == libres - 5);
+        fs.delete("/d/x.bin");   // otro proceso lo elimina mientras la solicitud espera
+        check("si lo eliminaron mientras esperaba, apply falla", falla(() -> io.apply(r), "ya no existe"));
+        check("y release no libera nada (ya estaba libre)", io.release(r) == 0
+                && fs.getDisk().countFreeFileBlocks() == libres);
+
+        PCB q = ProcessFactory.fileIo("Y", 1, 5, 16, 900, 2, IoOperation.CREATE, "/d/y.bin",
+                null, NodeType.FILE, 4, "admin", Permission.PUBLIC);
+        DiskRequest r2 = io.buildRequest(q, 2);
+        check("release de una solicitud cancelada elimina el archivo y libera sus 4 bloques",
+                io.release(r2) == 4 && fs.findByPath("/d/y.bin") == null
+                        && fs.getDisk().countFreeFileBlocks() == libres);
+
+        PCB s = ProcessFactory.fileIo("Z", 1, 5, 16, 900, 2, IoOperation.CREATE, "/d/z.bin",
+                null, NodeType.FILE, 2, "admin", Permission.PUBLIC);
+        DiskRequest r3 = io.buildRequest(s, 3);
+        fs.delete("/d");         // se elimina la carpeta que contenía el archivo reservado
+        check("si eliminaron la carpeta que lo contenía, apply falla y release no libera nada",
+                falla(() -> io.apply(r3), "ya no existe") && io.release(r3) == 0
+                        && fs.getDisk().countFreeFileBlocks() == libres);
+
+        PCB t = ProcessFactory.fileIo("W", 1, 5, 16, 900, 2, IoOperation.CREATE, "/d2/w.bin",
+                null, NodeType.FILE, 2, "admin", Permission.PUBLIC);
+        check("sin carpeta padre, buildRequest falla y no reserva nada",
+                falla(() -> io.buildRequest(t, 4), "no existe") && fs.getDisk().countFreeFileBlocks() == libres);
+    }
+
+    private static boolean falla(Runnable action, String fragmento) {
+        try {
+            action.run();
+        } catch (FileSystemException e) {
+            return e.getMessage().contains(fragmento);
+        }
+        return false;
     }
 
     private static void procesoDeUnaInstruccion() {
