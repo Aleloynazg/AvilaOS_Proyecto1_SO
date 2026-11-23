@@ -206,6 +206,20 @@ public class Disk implements ClockListener{
     }
 
     /**
+     * Primer bloque libre de la zona de archivos (donde empezaría un archivo nuevo).
+     *
+     * @return el número de bloque, o -1 si la zona de archivos está llena
+     */
+    public int getFirstFreeFileBlock() {
+        for (int i = fileSystemStart; i <= fileSystemEnd; i++) {
+            if (blocks[i].isFree()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Cuenta los bloques libres para swap.
      */
     public int countFreeSwapBlocks() {
@@ -286,6 +300,11 @@ public class Disk implements ClockListener{
 
        // Calcular el tiempo que la solicitud esperó en la cola.
        currentRequestWaitingTime = cycle - request.getArrivalCycle();
+
+       // Avisar al kernel qué solicitud eligió el disco (queda en el log del sistema).
+       if (kernel != null) {
+           kernel.onDiskRequestStarted(request, currentPolicyType, cycle);
+       }
 
        // Determinar hacia dónde debe moverse el cabezal.
        if (request.getTargetBlock() > currentHead) {
@@ -441,16 +460,18 @@ public class Disk implements ClockListener{
            lookCompleted++;
        }
 
-       // Desbloquear el proceso que solicitó la operación.
-       if (kernel != null) {
-           kernel.unblockProcess(currentRequest.getProcess(), cycle);
-       }
-
-       // Dejar el disco disponible para otra solicitud.
+       // Dejar el disco disponible antes de avisar al kernel: así el kernel puede mandar
+       // otra solicitud (por ejemplo, de swap) sin chocar con la que acaba de terminar.
+       DiskRequest finished = currentRequest;
        currentRequest = null;
        currentPolicyType = null;
        remainingBlocks = 0;
        state = DiskState.IDLE;
+
+       // El kernel aplica la operación sobre el sistema de archivos y despierta al proceso.
+       if (kernel != null) {
+           kernel.onDiskRequestCompleted(finished, cycle);
+       }
    }
 
     public DiskBlock getBlock(int blockNumber) {

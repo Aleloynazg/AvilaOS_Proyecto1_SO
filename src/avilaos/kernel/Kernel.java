@@ -1,12 +1,19 @@
 package avilaos.kernel;
 
+import avilaos.kernel.disk.DiskPolicyType;
+import avilaos.kernel.disk.DiskRequest;
+import avilaos.kernel.fs.FileIoManager;
+import avilaos.kernel.fs.FileSystem;
+import avilaos.kernel.fs.FileSystemException;
 import avilaos.kernel.memory.MemoryManager;
 import avilaos.kernel.process.BlockReason;
+import avilaos.kernel.process.IoOperation;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessState;
 import avilaos.kernel.process.TerminationCause;
 import avilaos.structures.LinkedQueue;
-import avilaos.hardware.ComputerMetrics; 
+import avilaos.hardware.ComputerMetrics;
+import avilaos.hardware.disk.Disk;
 
 /**
  * Núcleo del sistema operativo de UN computador. Maneja las 4 colas de
@@ -27,9 +34,21 @@ public class Kernel {
     /** Quienes escuchan los eventos (el log de la GUI, las métricas). */
     private final LinkedQueue<SystemEventListener> listeners = new LinkedQueue<>();
     
+    /** Disco y sistema de archivos del computador (null si este kernel se usa sin disco). */
+    private Disk disk;
+    private FileSystem fileSystem;
+    private FileIoManager fileIo;
+
     public Kernel(int computerId, MemoryManager memory) {
         this.computerId = computerId;
         this.memory = memory;
+    }
+
+    /** Conecta el kernel con el disco y el sistema de archivos que usan los procesos de E/S. */
+    public void setStorage(Disk disk, FileSystem fileSystem) {
+        this.disk = disk;
+        this.fileSystem = fileSystem;
+        this.fileIo = fileSystem == null ? null : new FileIoManager(fileSystem);
     }
 
     public void addEventListener(SystemEventListener listener) {
@@ -106,6 +125,16 @@ public class Kernel {
  public void terminateProcess(PCB process, TerminationCause cause, long cycle) {
     boolean hadMemory = process.getState() != ProcessState.NEW;
 
+    // Si el proceso muere con una solicitud esperando en la cola del disco, se cancela:
+    // no tiene sentido hacer una operación de archivos para un proceso que ya no existe.
+    if (disk != null && disk.getScheduler() != null) {
+        DiskRequest[] cancelled = disk.getScheduler().cancelRequestsOf(process);
+        for (DiskRequest request : cancelled) {
+            log(cycle, "se cancela la solicitud de " + process.getTag() + " en la cola del disco");
+            releaseReservation(request, cycle);
+        }
+    }
+
     newQueue.remove(process);
     readyQueue.remove(process);
     blockedQueue.remove(process);
@@ -137,6 +166,8 @@ public class Kernel {
 
     if (cause == TerminationCause.DEADLINE_MISSED) {
         log(cycle, process.getTag() + " termina: se venció su deadline");
+    } else if (cause == TerminationCause.IO_FAILED) {
+        log(cycle, process.getTag() + " termina con error de E/S");
     } else {
         log(cycle, process.getTag() + " termina correctamente");
     }
@@ -157,6 +188,110 @@ public class Kernel {
             process.unblock();
             readyQueue.enqueue(process);
             log(cycle, process.getTag() + " se desbloquea y vuelve a Listos");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // E/S de archivos: solicitudes al disco
+    // ------------------------------------------------------------------
+
+    /**
+     * Ejecuta la instrucción DISK_REQUEST de un proceso de E/S de archivos: revisa la
+     * operación, manda la solicitud a la cola del disco y bloquea al proceso (motivo
+     * "E/S del disco") hasta que el disco la atienda. El proceso ya debe haber salido de la CPU.
+     *
+     * Si la operación no se puede hacer (la ruta no existe, no hay espacio, nombre repetido...)
+     * el proceso termina con {@link TerminationCause#IO_FAILED} y se explica el motivo en el log.
+     *
+     * @return true si el proceso quedó bloqueado esperando al disco; false si terminó por falla
+     */
+    public boolean submitFileRequest(PCB process, long cycle) {
+        if (fileIo == null || disk == null || disk.getScheduler() == null) {
+            log(cycle, process.getTag() + " no puede hacer " + process.describeOperation()
+                    + ": el computador no tiene disco");
+            terminateProcess(process, TerminationCause.IO_FAILED, cycle);
+            return false;
+        }
+        DiskRequest request;
+        try {
+            request = fileIo.buildRequest(process, cycle);
+        } catch (FileSystemException e) {
+            log(cycle, process.getTag() + " no puede hacer " + process.describeOperation() + ": " + e.getMessage());
+            terminateProcess(process, TerminationCause.IO_FAILED, cycle);
+            return false;
+        }
+        blockProcess(process, BlockReason.DISK_IO, 0, cycle);
+        disk.getScheduler().addRequest(request);
+        log(cycle, process.getTag() + " pide al disco " + process.describeOperation() + " (bloque "
+                + request.getTargetBlock() + ", " + request.getBlockCount()
+                + (request.getBlockCount() == 1 ? " bloque)" : " bloques)"));
+        return true;
+    }
+
+    /** El disco eligió una solicitud de la cola: se deja en el log con la política que la eligió. */
+    public void onDiskRequestStarted(DiskRequest request, DiskPolicyType policy, long cycle) {
+        String what = request.getOperation().name();
+        if (request.getTargetPath() != null) {
+            what += " " + request.getTargetPath();
+        }
+        log(cycle, "El disco atiende la solicitud de " + request.getProcess().getTag() + " (" + what
+                + ") en el bloque " + request.getTargetBlock()
+                + (policy != null ? " (" + policy.getLabel() + ")" : ""));
+    }
+
+    /**
+     * El disco terminó una solicitud. Si es de un proceso de E/S de archivos, se aplica la
+     * operación sobre el sistema de archivos (revisándola otra vez, porque el estado pudo
+     * cambiar mientras esperaba) y se despierta al proceso; si ya no se puede hacer, el
+     * proceso termina con IO_FAILED. Si el proceso ya había terminado (por ejemplo, por
+     * deadline), la solicitud se descarta sin tocar el sistema de archivos.
+     */
+    public void onDiskRequestCompleted(DiskRequest request, long cycle) {
+        PCB process = request.getProcess();
+        IoOperation op = request.getOperation();
+        boolean fileOperation = fileIo != null && process.getIoOperation() != null
+                && (op == IoOperation.CREATE || op == IoOperation.READ
+                    || op == IoOperation.UPDATE || op == IoOperation.DELETE);
+
+        if (process.getState() == ProcessState.TERMINATED) {
+            log(cycle, "El disco descarta la solicitud de " + process.getTag()
+                    + ": el proceso ya había terminado");
+            releaseReservation(request, cycle);
+            return;
+        }
+        if (fileOperation) {
+            try {
+                log(cycle, "El disco termina la solicitud de " + process.getTag() + ": "
+                        + fileIo.apply(request));
+            } catch (FileSystemException e) {
+                log(cycle, "La operación de " + process.getTag() + " (" + process.describeOperation()
+                        + ") falla: " + e.getMessage());
+                releaseReservation(request, cycle);
+                terminateProcess(process, TerminationCause.IO_FAILED, cycle);
+                return;
+            }
+        }
+        unblockProcess(process, cycle);
+        // Un proceso de una sola instrucción ya la ejecutó (la solicitud): termina al despertar.
+        if (fileOperation && process.getState() == ProcessState.READY && process.isFinished()) {
+            terminateProcess(process, TerminationCause.COMPLETED, cycle);
+        }
+    }
+
+    /** Libera lo que reservó una solicitud que no se completa (el archivo de un CREATE y sus bloques). */
+    private void releaseReservation(DiskRequest request, long cycle) {
+        if (fileIo == null) {
+            return;
+        }
+        int freed;
+        try {
+            freed = fileIo.release(request);
+        } catch (FileSystemException e) {
+            log(cycle, "no se pudo liberar lo reservado para " + request.getTargetPath() + ": " + e.getMessage());
+            return;
+        }
+        if (freed > 0) {
+            log(cycle, "se liberan los " + freed + " bloques reservados para " + request.getTargetPath());
         }
     }
 
@@ -196,6 +331,8 @@ public class Kernel {
         }
     }
 
+    public Disk getDisk() { return disk; }
+    public FileSystem getFileSystem() { return fileSystem; }
     public int getComputerId() { return computerId; }
     public MemoryManager getMemory() { return memory; }
     public LinkedQueue<PCB> getNewQueue() { return newQueue; }

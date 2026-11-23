@@ -9,6 +9,7 @@ package avilaos.kernel.disk;
  * @author alexandraloynaz
  */
 
+import avilaos.kernel.process.PCB;
 import avilaos.structures.LinkedQueue;
 import java.util.concurrent.Semaphore;
 import avilaos.hardware.disk.HeadDirection;
@@ -52,6 +53,29 @@ public class DiskScheduler {
 
         requests.enqueue(request);
         availableRequests.release();
+    }
+
+    /**
+     * Saca de la cola todas las solicitudes pendientes de un proceso (por ejemplo, porque
+     * el proceso terminó por deadline mientras esperaba). No toca la solicitud que el disco
+     * ya está atendiendo, porque esa ya salió de la cola.
+     *
+     * @return las solicitudes que se cancelaron (para que el kernel libere lo que reservaron)
+     */
+    public DiskRequest[] cancelRequestsOf(PCB process) {
+        DiskRequest[] cancelled = new DiskRequest[0];
+        Object[] pending = requests.toArray();
+        for (Object o : pending) {
+            DiskRequest request = (DiskRequest) o;
+            if (request.getProcess() == process && requests.remove(request)) {
+                availableRequests.tryAcquire();   // el semáforo cuenta las solicitudes en cola
+                DiskRequest[] bigger = new DiskRequest[cancelled.length + 1];
+                System.arraycopy(cancelled, 0, bigger, 0, cancelled.length);
+                bigger[cancelled.length] = request;
+                cancelled = bigger;
+            }
+        }
+        return cancelled;
     }
 
     /**
