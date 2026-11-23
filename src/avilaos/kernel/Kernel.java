@@ -127,9 +127,12 @@ public class Kernel {
 
     // Si el proceso muere con una solicitud esperando en la cola del disco, se cancela:
     // no tiene sentido hacer una operación de archivos para un proceso que ya no existe.
-    if (disk != null && disk.getScheduler() != null
-            && disk.getScheduler().cancelRequestsOf(process) > 0) {
-        log(cycle, "se cancela la solicitud de " + process.getTag() + " en la cola del disco");
+    if (disk != null && disk.getScheduler() != null) {
+        DiskRequest[] cancelled = disk.getScheduler().cancelRequestsOf(process);
+        for (DiskRequest request : cancelled) {
+            log(cycle, "se cancela la solicitud de " + process.getTag() + " en la cola del disco");
+            releaseReservation(request, cycle);
+        }
     }
 
     newQueue.remove(process);
@@ -253,6 +256,7 @@ public class Kernel {
         if (process.getState() == ProcessState.TERMINATED) {
             log(cycle, "El disco descarta la solicitud de " + process.getTag()
                     + ": el proceso ya había terminado");
+            releaseReservation(request, cycle);
             return;
         }
         if (fileOperation) {
@@ -262,6 +266,7 @@ public class Kernel {
             } catch (FileSystemException e) {
                 log(cycle, "La operación de " + process.getTag() + " (" + process.describeOperation()
                         + ") falla: " + e.getMessage());
+                releaseReservation(request, cycle);
                 terminateProcess(process, TerminationCause.IO_FAILED, cycle);
                 return;
             }
@@ -270,6 +275,23 @@ public class Kernel {
         // Un proceso de una sola instrucción ya la ejecutó (la solicitud): termina al despertar.
         if (fileOperation && process.getState() == ProcessState.READY && process.isFinished()) {
             terminateProcess(process, TerminationCause.COMPLETED, cycle);
+        }
+    }
+
+    /** Libera lo que reservó una solicitud que no se completa (el archivo de un CREATE y sus bloques). */
+    private void releaseReservation(DiskRequest request, long cycle) {
+        if (fileIo == null) {
+            return;
+        }
+        int freed;
+        try {
+            freed = fileIo.release(request);
+        } catch (FileSystemException e) {
+            log(cycle, "no se pudo liberar lo reservado para " + request.getTargetPath() + ": " + e.getMessage());
+            return;
+        }
+        if (freed > 0) {
+            log(cycle, "se liberan los " + freed + " bloques reservados para " + request.getTargetPath());
         }
     }
 

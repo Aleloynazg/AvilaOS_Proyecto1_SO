@@ -13,9 +13,11 @@ import avilaos.kernel.process.PCB;
  *   <li>Antes de pedirle nada al disco se revisa que la operación tenga sentido (la ruta
  *       existe, hay espacio, el nombre es válido...). Si no, se lanza
  *       {@link FileSystemException} con el motivo y el proceso termina con IO_FAILED.</li>
- *   <li>El sistema de archivos cambia cuando el disco TERMINA la solicitud, no cuando se
- *       pide: así el árbol y la tabla de asignación se actualizan en el momento real.
- *       Como el estado pudo cambiar mientras esperaba en la cola, se revisa de nuevo.</li>
+ *   <li>CREATE de un archivo reserva sus bloques al generar la solicitud (decisión del equipo:
+ *       así se conoce el bloque destino y dos CREATE no toman los mismos bloques); si la
+ *       solicitud falla o se cancela, se libera. UPDATE, DELETE y CREATE de un directorio se
+ *       aplican cuando el disco TERMINA la solicitud. Como el estado pudo cambiar mientras
+ *       esperaba en la cola, se revisa de nuevo al terminar.</li>
  *   <li>Costo en bloques: leer y crear un archivo cuestan tantos bloques como tiene;
  *       renombrar y eliminar cuestan 1 (solo cambia la entrada del directorio).</li>
  *   <li>Los directorios no ocupan bloques propios: sus operaciones van al primer bloque
@@ -99,10 +101,15 @@ public class FileIoManager {
                     dir.setCreator(p.getTag());
                     return "crea el directorio " + path;
                 }
-                FileEntry file = fs.createFile(path, request.getBlockCount(), request.getOwner(),
-                        request.getPermission(), p.getTag());
-                return "crea " + path + " (" + file.getBlockCount() + " bloques desde el bloque "
-                        + file.getStartBlock() + ")";
+                // El archivo se reservó al generar la solicitud: ahora solo se confirma que
+                // sigue ahí (otro proceso pudo eliminarlo mientras la solicitud esperaba).
+                FsNode reserved = request.getReservedNode();
+                if (reserved == null || !attached(reserved)) {
+                    throw new FileSystemException("El archivo " + path
+                            + " ya no existe: lo eliminaron mientras esperaba al disco");
+                }
+                return "crea " + fs.pathOf(reserved) + " (" + reserved.getBlockCount()
+                        + " bloques desde el bloque " + reserved.getFirstBlock() + ")";
             case READ: {
                 FsNode node = existing(path);
                 return "lee " + path + " (" + (node.isFile() ? node.getBlockCount() : 1) + " bloques)";
@@ -122,23 +129,47 @@ public class FileIoManager {
 
     // ------------------------------------------------------------------
 
+    /**
+     * CREATE de un archivo: los bloques se RESERVAN al generar la solicitud (así se conoce su
+     * bloque destino y dos CREATE no toman los mismos bloques); el archivo ya aparece en el
+     * árbol. Si la solicitud falla o se cancela, {@link #release} lo elimina y libera los bloques.
+     * CREATE de un directorio no ocupa bloques: se crea cuando el disco termina.
+     */
     private DiskRequest buildCreate(PCB p, String path, long cycle) {
-        fs.checkCanCreate(path);
         if (p.getTargetType() == NodeType.DIRECTORY) {
+            fs.checkCanCreate(path);
             return new DiskRequest(p, IoOperation.CREATE, METADATA_BLOCK, 1, cycle, path, null,
                     p.getIoOwner(), p.getIoPermission());
         }
-        int blocks = p.getFileBlocks();
-        int free = fs.getDisk().countFreeFileBlocks();
-        if (blocks < 1) {
-            throw new FileSystemException("El archivo debe tener al menos 1 bloque (valor: " + blocks + ")");
+        FileEntry file = fs.createFile(path, p.getFileBlocks(), p.getIoOwner(), p.getIoPermission(), p.getTag());
+        DiskRequest request = new DiskRequest(p, IoOperation.CREATE, file.getStartBlock(), file.getBlockCount(),
+                cycle, path, null, p.getIoOwner(), p.getIoPermission());
+        request.setReservedNode(file);
+        return request;
+    }
+
+    /**
+     * Libera lo que reservó una solicitud que no se va a completar (el proceso murió o la
+     * operación falló): un archivo de un CREATE se elimina y sus bloques quedan libres.
+     *
+     * @return cuántos bloques se liberaron
+     */
+    public int release(DiskRequest request) {
+        FsNode reserved = request.getReservedNode();
+        if (request.getOperation() != IoOperation.CREATE || reserved == null || !attached(reserved)) {
+            return 0;
         }
-        if (blocks > free) {
-            throw new FileSystemException("No hay bloques libres suficientes: el archivo necesita "
-                    + blocks + " y quedan " + free);
+        return fs.delete(fs.pathOf(reserved));
+    }
+
+    /** true si el elemento sigue en el árbol (nadie lo eliminó, ni a él ni a una carpeta que lo contenía). */
+    private boolean attached(FsNode node) {
+        for (FsNode current = node; current != null; current = current.getParent()) {
+            if (current == fs.getRoot()) {
+                return true;
+            }
         }
-        return new DiskRequest(p, IoOperation.CREATE, fs.getDisk().getFirstFreeFileBlock(), blocks, cycle,
-                path, null, p.getIoOwner(), p.getIoPermission());
+        return false;
     }
 
     private FsNode existing(String path) {
