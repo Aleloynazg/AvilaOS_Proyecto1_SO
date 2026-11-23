@@ -11,6 +11,7 @@ import avilaos.kernel.process.IoOperation;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessState;
 import avilaos.kernel.process.TerminationCause;
+import avilaos.kernel.swap.SwapArea;
 import avilaos.structures.LinkedQueue;
 import avilaos.hardware.ComputerMetrics;
 import avilaos.hardware.disk.Disk;
@@ -43,6 +44,7 @@ public class Kernel {
     private Disk disk;
     private FileSystem fileSystem;
     private FileIoManager fileIo;
+    private SwapArea swap;
 
     public Kernel(int computerId, MemoryManager memory) {
         this.computerId = computerId;
@@ -54,6 +56,7 @@ public class Kernel {
         this.disk = disk;
         this.fileSystem = fileSystem;
         this.fileIo = fileSystem == null ? null : new FileIoManager(fileSystem);
+        this.swap = disk == null ? null : new SwapArea(disk);
     }
 
     public void addEventListener(SystemEventListener listener) {
@@ -291,8 +294,8 @@ public class Kernel {
 
     /** Libera los bloques de swap del proceso (no hace nada si no tenía). */
     private void releaseSwap(PCB process) {
-        if (disk != null && process.getSwapStartBlock() >= 0) {
-            disk.freeBlocks(process);
+        if (swap != null) {
+            swap.release(process);
         }
         process.setSwapStartBlock(-1);
     }
@@ -449,6 +452,7 @@ public class Kernel {
     }
 
     public Disk getDisk() { return disk; }
+    public SwapArea getSwap() { return swap; }
     public FileSystem getFileSystem() { return fileSystem; }
     public int getComputerId() { return computerId; }
     public MemoryManager getMemory() { return memory; }
