@@ -193,6 +193,38 @@ public class FileSystem {
         }
     }
 
+    /**
+     * Registra un archivo fragmentado cuya cadena de bloques se conoce (por ejemplo,
+     * al volver a cargar un estado guardado). El primer bloque es el primero de la cadena.
+     *
+     * @throws FileSystemException si algún bloque está fuera de la zona de archivos,
+     *         repetido u ocupado
+     */
+    public FileEntry loadFileChain(String path, int[] chain, String owner,
+                                   Permission permission, String creator) {
+        mutex.acquireUninterruptibly();
+        try {
+            Directory parent = parentForNewNode(path);
+            if (chain == null || chain.length < 1) {
+                throw new FileSystemException("El archivo debe tener al menos 1 bloque");
+            }
+            FileEntry file = new FileEntry(lastName(path), permission, null);
+            file.setOwner(owner);
+            file.setCreator(creator);
+            if (!disk.allocateFileOn(file, chain)) {
+                throw new FileSystemException("La cadena de bloques de " + path
+                        + " tiene bloques fuera de la zona de archivos (0 a "
+                        + (disk.getFileBlockCount() - 1) + "), repetidos u ocupados por otro archivo");
+            }
+            file.setLocation(chain[0], chain.length);
+            parent.addChild(file);
+            file.setColorIndex(nextColor++);
+            return file;
+        } finally {
+            mutex.release();
+        }
+    }
+
     // ------------------------------------------------------------------
     // Renombrar y eliminar
     // ------------------------------------------------------------------
