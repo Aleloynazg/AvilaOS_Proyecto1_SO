@@ -11,6 +11,7 @@ import avilaos.kernel.process.IoOperation;
 import avilaos.kernel.process.PCB;
 import avilaos.kernel.process.ProcessState;
 import avilaos.kernel.process.TerminationCause;
+import avilaos.kernel.scheduler.MediumTermScheduler;
 import avilaos.kernel.swap.SwapArea;
 import avilaos.structures.LinkedQueue;
 import avilaos.hardware.ComputerMetrics;
@@ -45,6 +46,7 @@ public class Kernel {
     private FileSystem fileSystem;
     private FileIoManager fileIo;
     private SwapArea swap;
+    private MediumTermScheduler medium;
 
     public Kernel(int computerId, MemoryManager memory) {
         this.computerId = computerId;
@@ -57,6 +59,7 @@ public class Kernel {
         this.fileSystem = fileSystem;
         this.fileIo = fileSystem == null ? null : new FileIoManager(fileSystem);
         this.swap = disk == null ? null : new SwapArea(disk);
+        this.medium = swap == null ? null : new MediumTermScheduler(this, memory, swap);
     }
 
     public void addEventListener(SystemEventListener listener) {
@@ -102,6 +105,18 @@ public class Kernel {
      * Devuelve cuántos admitió.
      */
     public int admitNewProcesses(long cycle) {
+        return admitNewProcesses(cycle, true);
+    }
+
+    /**
+     * @param reactivateFirst true para reactivar antes a los Listos suspendidos (decisión del
+     *                        equipo: tienen preferencia sobre los Nuevos, porque ya habían sido
+     *                        admitidos); false solo justo después de terminar una suspensión
+     */
+    private int admitNewProcesses(long cycle, boolean reactivateFirst) {
+        if (reactivateFirst && medium != null) {
+            medium.reactivate(cycle);
+        }
         int admitted = 0;
         PCB first = newQueue.peek();
         while (first != null && memory.allocate(first.getMemoryRequired())) {
@@ -112,6 +127,11 @@ public class Kernel {
             log(cycle, "admite " + first.getTag() + " (" + first.getMemoryRequired()
                     + " MB). RAM libre: " + memory.getFreeMemory() + " MB");
             first = newQueue.peek();
+        }
+        // Si el primero de Nuevos no cabe, el planificador a mediano plazo libera RAM
+        // suspendiendo a procesos Bloqueados (si se puede).
+        if (first != null && medium != null) {
+            medium.makeRoomFor(first, cycle);
         }
         return admitted;
     }
@@ -154,6 +174,9 @@ public class Kernel {
         memory.free(process.getMemoryRequired());
     }
     // Si estaba suspendido (o a punto de estarlo) su espacio en el swap queda libre.
+    if (medium != null && process.isSuspending()) {
+        medium.suspensionAborted(process);   // su RAM ya se liberó arriba: no hay que esperarla
+    }
     releaseSwap(process);
     process.setSuspending(false);
     process.setResuming(false);
@@ -368,6 +391,24 @@ public class Kernel {
             releaseReservation(request, cycle);
             return;
         }
+        // Suspender y reactivar no son operaciones de archivos: no despiertan al proceso.
+        if (op == IoOperation.SUSPEND) {
+            if (medium != null) {
+                log(cycle, "El disco termina de escribir a " + process.getTag() + " en el swap");
+                medium.completeSuspend(request, cycle);
+                // La RAM que acaba de quedar libre es para el proceso que provocó la suspensión: se admite
+                // a los Nuevos antes de reactivar a nadie (si no, el suspendido volvería de inmediato).
+                admitNewProcesses(cycle, false);
+            }
+            return;
+        }
+        if (op == IoOperation.RESUME) {
+            if (medium != null) {
+                log(cycle, "El disco termina de leer a " + process.getTag() + " del swap");
+                medium.completeResume(request, cycle);
+            }
+            return;
+        }
         if (fileOperation) {
             try {
                 log(cycle, "El disco termina la solicitud de " + process.getTag() + ": "
@@ -453,6 +494,9 @@ public class Kernel {
 
     public Disk getDisk() { return disk; }
     public SwapArea getSwap() { return swap; }
+    public MediumTermScheduler getMediumTermScheduler() { return medium; }
+    public int getSuspensionCount() { return medium == null ? 0 : medium.getSuspensionCount(); }
+    public int getReactivationCount() { return medium == null ? 0 : medium.getReactivationCount(); }
     public FileSystem getFileSystem() { return fileSystem; }
     public int getComputerId() { return computerId; }
     public MemoryManager getMemory() { return memory; }
