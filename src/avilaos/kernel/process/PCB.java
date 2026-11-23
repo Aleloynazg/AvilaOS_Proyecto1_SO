@@ -51,6 +51,12 @@ public class PCB {
     private String ioOwner = FsNode.DEFAULT_OWNER;         // CREATE: dueño del elemento nuevo
     private Permission ioPermission = Permission.PUBLIC;   // CREATE: permiso del elemento nuevo
 
+    // ---- Suspensión (modelo de siete estados) ----
+    private long blockedSinceCycle = -1;    // ciclo en que se bloqueó (criterio del planificador a mediano plazo)
+    private int swapStartBlock = -1;        // primer bloque del swap donde está (o estará) su memoria; -1 si ninguno
+    private boolean suspending;             // su SUSPEND está en la cola del disco: todavía ocupa RAM
+    private boolean resuming;               // su RESUME está en la cola del disco: ya tiene RAM reservada
+
     // ---- Métricas ----
     private long arrivalCycle = -1;
     private long firstRunCycle = -1;
@@ -100,6 +106,30 @@ public class PCB {
         return remainingInstructions <= 0;
     }
 
+    /**
+     * true si el proceso ocupa memoria RAM ahora. Los Nuevos y los suspendidos no la ocupan,
+     * salvo en tránsito: uno que se está suspendiendo todavía la ocupa (su memoria se libera
+     * cuando el disco termina de escribirla en el swap) y uno que se está reactivando ya la
+     * tiene reservada.
+     */
+    public boolean holdsMemory() {
+        switch (state) {
+            case READY:
+            case RUNNING:
+            case BLOCKED:
+                return true;
+            case READY_SUSPENDED:
+                return suspending || resuming;
+            default:
+                return false;
+        }
+    }
+
+    /** true si el proceso está en alguno de los dos estados suspendidos. */
+    public boolean isSuspended() {
+        return state == ProcessState.READY_SUSPENDED || state == ProcessState.BLOCKED_SUSPENDED;
+    }
+
     public void block(BlockReason reason, int cycles) {
         this.state = ProcessState.BLOCKED;
         this.blockReason = reason;
@@ -140,6 +170,10 @@ public class PCB {
     public int getCurrentStep() { return currentStep; }
     public int getIoEveryCycles() { return ioEveryCycles; }
     public int getIoDurationCycles() { return ioDurationCycles; }
+    public long getBlockedSinceCycle() { return blockedSinceCycle; }
+    public int getSwapStartBlock() { return swapStartBlock; }
+    public boolean isSuspending() { return suspending; }
+    public boolean isResuming() { return resuming; }
     public IoOperation getIoOperation() { return ioOperation; }
     public String getTargetPath() { return targetPath; }
     public String getNewName() { return newName; }
@@ -177,6 +211,10 @@ public class PCB {
         this.ioOwner = owner == null || owner.trim().isEmpty() ? FsNode.DEFAULT_OWNER : owner.trim();
         this.ioPermission = permission == null ? Permission.PUBLIC : permission;
     }
+    public void setBlockedSinceCycle(long cycle) { this.blockedSinceCycle = cycle; }
+    public void setSwapStartBlock(int block) { this.swapStartBlock = block; }
+    public void setSuspending(boolean suspending) { this.suspending = suspending; }
+    public void setResuming(boolean resuming) { this.resuming = resuming; }
     public void setArrivalCycle(long cycle) { this.arrivalCycle = cycle; }
     public void markFirstRun(long cycle) { if (firstRunCycle < 0) firstRunCycle = cycle; }
     public void incrementCyclesOnCpu() { cyclesOnCpu++; }

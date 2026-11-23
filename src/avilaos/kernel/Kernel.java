@@ -16,8 +16,10 @@ import avilaos.hardware.ComputerMetrics;
 import avilaos.hardware.disk.Disk;
 
 /**
- * Núcleo del sistema operativo de UN computador. Maneja las 4 colas de
- * procesos y la admisión por memoria (planificación a largo plazo).
+ * Núcleo del sistema operativo de UN computador. Maneja las colas de procesos (Nuevos, Listos,
+ * Bloqueados, Terminados y, en el modelo de siete estados, Listos suspendidos y Bloqueados
+ * suspendidos), la admisión por memoria (planificación a largo plazo) y la suspensión y
+ * reactivación de procesos (planificación a mediano plazo).
  * La CPU y la política de planificación (corto plazo) son de la persona A.
  */
 public class Kernel {
@@ -30,6 +32,9 @@ public class Kernel {
     private final LinkedQueue<PCB> readyQueue = new LinkedQueue<>();
     private final LinkedQueue<PCB> blockedQueue = new LinkedQueue<>();
     private final LinkedQueue<PCB> terminatedQueue = new LinkedQueue<>();
+    /** Procesos suspendidos: su memoria está en el área de swap del disco, no en la RAM. */
+    private final LinkedQueue<PCB> readySuspendedQueue = new LinkedQueue<>();
+    private final LinkedQueue<PCB> blockedSuspendedQueue = new LinkedQueue<>();
 
     /** Quienes escuchan los eventos (el log de la GUI, las métricas). */
     private final LinkedQueue<SystemEventListener> listeners = new LinkedQueue<>();
@@ -123,7 +128,8 @@ public class Kernel {
      * Si el proceso estaba en la CPU, la persona A lo saca de la CPU antes.
      */
  public void terminateProcess(PCB process, TerminationCause cause, long cycle) {
-    boolean hadMemory = process.getState() != ProcessState.NEW;
+    // Los Nuevos y los suspendidos no ocupan RAM (salvo los que están en tránsito hacia o desde el swap).
+    boolean hadMemory = process.holdsMemory();
 
     // Si el proceso muere con una solicitud esperando en la cola del disco, se cancela:
     // no tiene sentido hacer una operación de archivos para un proceso que ya no existe.
@@ -138,10 +144,16 @@ public class Kernel {
     newQueue.remove(process);
     readyQueue.remove(process);
     blockedQueue.remove(process);
+    readySuspendedQueue.remove(process);
+    blockedSuspendedQueue.remove(process);
 
     if (hadMemory) {
         memory.free(process.getMemoryRequired());
     }
+    // Si estaba suspendido (o a punto de estarlo) su espacio en el swap queda libre.
+    releaseSwap(process);
+    process.setSuspending(false);
+    process.setResuming(false);
 
     process.terminate(cause, cycle);
     terminatedQueue.enqueue(process);
@@ -178,17 +190,111 @@ public class Kernel {
     /** Un proceso se bloquea. cycles = cuánto dura (E/S); 0 si espera un evento sin tiempo fijo. */
     public void blockProcess(PCB process, BlockReason reason, int cycles, long cycle) {
         process.block(reason, cycles);
+        process.setBlockedSinceCycle(cycle);
         blockedQueue.enqueue(process);
         log(cycle, process.getTag() + " se bloquea: " + reason.getLabel());
     }
 
-    /** Un proceso bloqueado vuelve a Listos. */
+    /**
+     * Un proceso bloqueado vuelve a Listos. Si estaba suspendido (o se estaba suspendiendo)
+     * pasa a Listo suspendido: sigue sin RAM hasta que el planificador a mediano plazo lo reactive.
+     */
     public void unblockProcess(PCB process, long cycle) {
         if (blockedQueue.remove(process)) {
             process.unblock();
-            readyQueue.enqueue(process);
-            log(cycle, process.getTag() + " se desbloquea y vuelve a Listos");
+            if (process.isSuspending()) {
+                // Su memoria ya viaja al swap: no vuelve a Listos, queda Listo suspendido.
+                // Sigue ocupando la RAM hasta que el disco termine de escribirla.
+                process.setState(ProcessState.READY_SUSPENDED);
+                readySuspendedQueue.enqueue(process);
+                log(cycle, process.getTag() + " se desbloquea mientras se suspende: queda Listo suspendido");
+            } else {
+                readyQueue.enqueue(process);
+                log(cycle, process.getTag() + " se desbloquea y vuelve a Listos");
+            }
+        } else if (blockedSuspendedQueue.remove(process)) {
+            process.unblock();
+            process.setState(ProcessState.READY_SUSPENDED);
+            readySuspendedQueue.enqueue(process);
+            log(cycle, process.getTag() + " se desbloquea y pasa a Listo suspendido");
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Siete estados: suspender y reactivar
+    // ------------------------------------------------------------------
+
+    /**
+     * Suspende un proceso: su memoria sale de la RAM y el proceso pasa a Bloqueado suspendido
+     * (si estaba Bloqueado) o a Listo suspendido (si estaba Listo). La RAM que ocupaba queda libre.
+     * También sirve para terminar de suspender a un proceso que ya estaba "en tránsito"
+     * (su SUSPEND esperaba al disco y entretanto se desbloqueó): en ese caso ya era Listo
+     * suspendido y solo falta liberar su RAM.
+     *
+     * No se puede suspender a un proceso Nuevo, Terminado, en Ejecución ni ya suspendido
+     * (en esos casos no hace nada y devuelve false).
+     *
+     * @return true si el proceso quedó suspendido
+     */
+    public boolean suspendProcess(PCB process, long cycle) {
+        ProcessState state = process.getState();
+        if (state == ProcessState.READY_SUSPENDED && process.isSuspending()) {
+            memory.free(process.getMemoryRequired());
+            process.setSuspending(false);
+            log(cycle, process.getTag() + " queda suspendido en el swap: libera "
+                    + process.getMemoryRequired() + " MB. RAM libre: " + memory.getFreeMemory() + " MB");
+            return true;
+        }
+        if (state == ProcessState.BLOCKED && blockedQueue.remove(process)) {
+            process.setState(ProcessState.BLOCKED_SUSPENDED);
+            blockedSuspendedQueue.enqueue(process);
+        } else if (state == ProcessState.READY && readyQueue.remove(process)) {
+            process.setState(ProcessState.READY_SUSPENDED);
+            readySuspendedQueue.enqueue(process);
+        } else {
+            return false;
+        }
+        memory.free(process.getMemoryRequired());
+        process.setSuspending(false);
+        log(cycle, process.getTag() + " se suspende (" + process.getState().getLabel() + "): libera "
+                + process.getMemoryRequired() + " MB. RAM libre: " + memory.getFreeMemory() + " MB");
+        return true;
+    }
+
+    /**
+     * Reactiva un proceso Listo suspendido: vuelve a la RAM y pasa a Listos, y su espacio en el
+     * swap queda libre. Solo se reactivan los Listos suspendidos; un Bloqueado suspendido primero
+     * debe desbloquearse (cuando termine su espera pasa a Listo suspendido).
+     *
+     * @param memoryAlreadyReserved true si la RAM ya se reservó al generar la solicitud de
+     *                              reactivación (el caso normal del planificador a mediano plazo);
+     *                              false para reservarla ahora
+     * @return false si el proceso no es Listo suspendido o no hay RAM libre
+     */
+    public boolean resumeProcess(PCB process, long cycle, boolean memoryAlreadyReserved) {
+        if (process.getState() != ProcessState.READY_SUSPENDED || process.isSuspending()
+                || !readySuspendedQueue.remove(process)) {
+            return false;
+        }
+        if (!memoryAlreadyReserved && !memory.allocate(process.getMemoryRequired())) {
+            readySuspendedQueue.enqueue(process);   // sigue esperando
+            return false;
+        }
+        releaseSwap(process);
+        process.setResuming(false);
+        process.setState(ProcessState.READY);
+        readyQueue.enqueue(process);
+        log(cycle, process.getTag() + " se reactiva y vuelve a Listos (" + process.getMemoryRequired()
+                + " MB). RAM libre: " + memory.getFreeMemory() + " MB");
+        return true;
+    }
+
+    /** Libera los bloques de swap del proceso (no hace nada si no tenía). */
+    private void releaseSwap(PCB process) {
+        if (disk != null && process.getSwapStartBlock() >= 0) {
+            disk.freeBlocks(process);
+        }
+        process.setSwapStartBlock(-1);
     }
 
     // ------------------------------------------------------------------
@@ -273,7 +379,9 @@ public class Kernel {
         }
         unblockProcess(process, cycle);
         // Un proceso de una sola instrucción ya la ejecutó (la solicitud): termina al despertar.
-        if (fileOperation && process.getState() == ProcessState.READY && process.isFinished()) {
+        if (fileOperation && process.isFinished()
+                && (process.getState() == ProcessState.READY
+                    || process.getState() == ProcessState.READY_SUSPENDED)) {
             terminateProcess(process, TerminationCause.COMPLETED, cycle);
         }
     }
@@ -297,7 +405,13 @@ public class Kernel {
 
     /** Resta un ciclo a los bloqueos con tiempo (E/S) y despierta a los que terminan. */
     public void tickTimedBlocks(long cycle) {
-        Object[] blocked = blockedQueue.toArray();
+        tickTimedBlocksIn(blockedQueue, cycle);
+        // La espera de un proceso suspendido sigue corriendo: el dispositivo no se detiene por estar en el swap.
+        tickTimedBlocksIn(blockedSuspendedQueue, cycle);
+    }
+
+    private void tickTimedBlocksIn(LinkedQueue<PCB> queue, long cycle) {
+        Object[] blocked = queue.toArray();
         for (Object o : blocked) {
             PCB p = (PCB) o;
             BlockReason reason = p.getBlockReason();
@@ -319,6 +433,9 @@ public class Kernel {
         tickDeadlinesIn(newQueue, cycle);
         tickDeadlinesIn(readyQueue, cycle);
         tickDeadlinesIn(blockedQueue, cycle);
+        // El tiempo sigue corriendo para los suspendidos: si se les vence el deadline, se terminan.
+        tickDeadlinesIn(readySuspendedQueue, cycle);
+        tickDeadlinesIn(blockedSuspendedQueue, cycle);
     }
 
     private void tickDeadlinesIn(LinkedQueue<PCB> queue, long cycle) {
@@ -339,5 +456,7 @@ public class Kernel {
     public LinkedQueue<PCB> getReadyQueue() { return readyQueue; }
     public LinkedQueue<PCB> getBlockedQueue() { return blockedQueue; }
     public LinkedQueue<PCB> getTerminatedQueue() { return terminatedQueue; }
+    public LinkedQueue<PCB> getReadySuspendedQueue() { return readySuspendedQueue; }
+    public LinkedQueue<PCB> getBlockedSuspendedQueue() { return blockedSuspendedQueue; }
 
 }

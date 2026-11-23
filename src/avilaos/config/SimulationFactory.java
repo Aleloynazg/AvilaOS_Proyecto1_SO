@@ -209,6 +209,8 @@ public final class SimulationFactory {
             computer.getKernel().getNewQueue().toArray(),
             computer.getKernel().getReadyQueue().toArray(),
             computer.getKernel().getBlockedQueue().toArray(),
+            computer.getKernel().getReadySuspendedQueue().toArray(),
+            computer.getKernel().getBlockedSuspendedQueue().toArray(),
             computer.getKernel().getTerminatedQueue().toArray()
         };
         for (int g = 0; g < groups.length; g++) {
