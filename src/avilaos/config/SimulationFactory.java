@@ -3,6 +3,7 @@ package avilaos.config;
 import avilaos.hardware.Computer;
 import avilaos.hardware.GlobalClock;
 import avilaos.hardware.disk.Disk;
+import avilaos.hardware.disk.HeadDirection;
 import avilaos.kernel.fs.NodeType;
 import avilaos.kernel.fs.Permission;
 import avilaos.kernel.process.IoOperation;
@@ -80,6 +81,10 @@ public final class SimulationFactory {
 
         Disk disk = new Disk(fileSystem.diskConfig.totalBlocks, swap);
         disk.setCurrentHead(fileSystem.diskConfig.initialHead);
+        if (processes.globalConfig.headSpeed != null) {
+            disk.setHeadSpeed(processes.globalConfig.headSpeed);
+        }
+        disk.setHeadDirection(ProcessesConfig.parseDirection(processes.globalConfig.initialDirection));
 
         Computer computer = new Computer(COMPUTER_ID, processes.computer.ramCapacity, disk);
         GlobalClock clock = new GlobalClock(processes.globalConfig.cycleDurationMs);
@@ -107,6 +112,14 @@ public final class SimulationFactory {
         config.globalConfig.cycleDurationMs = clock.getCycleDuration();
         config.globalConfig.swapSizeBlocks = computer.getDisk().getSwapBlockCount();
         config.globalConfig.initialDiskPolicy = computer.getDiskPolicyType().getLabel();
+        // Solo se escriben cuando no son los valores por defecto, para que el archivo siga
+        // pareciéndose al del enunciado.
+        if (computer.getDisk().getHeadSpeed() != Disk.MIN_HEAD_SPEED) {
+            config.globalConfig.headSpeed = computer.getDisk().getHeadSpeed();
+        }
+        if (computer.getDisk().getHeadDirection() == HeadDirection.DOWN) {
+            config.globalConfig.initialDirection = "DOWN";
+        }
         config.computer.ramCapacity = computer.getMemoryManager().getTotalMemory();
         config.computer.policy = computer.getPolicy().getType().name();
         config.computer.quantum = computer.getPolicy() instanceof RoundRobinPolicy

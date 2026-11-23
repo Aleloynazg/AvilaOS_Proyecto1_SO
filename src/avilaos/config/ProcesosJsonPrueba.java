@@ -1,6 +1,7 @@
 package avilaos.config;
 
 import avilaos.config.SimulationFactory.Simulation;
+import avilaos.hardware.disk.HeadDirection;
 import avilaos.kernel.disk.DiskPolicyType;
 import avilaos.kernel.process.IoOperation;
 import avilaos.kernel.process.PCB;
@@ -87,6 +88,13 @@ public class ProcesosJsonPrueba {
         rechaza("swap negativo", doc(GLOBAL_OK.replace("100", "-1"), COMPUTER_OK, PROCESO_OK), "swapSizeBlocks");
         rechaza("política de disco desconocida", doc(GLOBAL_OK.replace("FIFO", "XYZ"), COMPUTER_OK, PROCESO_OK),
                 "initialDiskPolicy");
+        rechaza("velocidad del cabezal 0", doc(GLOBAL_OK.replace("}", ",\"headSpeed\":0}"), COMPUTER_OK, PROCESO_OK),
+                "headSpeed");
+        rechaza("velocidad del cabezal 101", doc(GLOBAL_OK.replace("}", ",\"headSpeed\":101}"), COMPUTER_OK, PROCESO_OK),
+                "headSpeed");
+        rechaza("dirección inicial inválida",
+                doc(GLOBAL_OK.replace("}", ",\"initialDirection\":\"LADO\"}"), COMPUTER_OK, PROCESO_OK),
+                "initialDirection");
         rechaza("RAM demasiado pequeña", doc(GLOBAL_OK, COMPUTER_OK.replace("1024", "10"), PROCESO_OK), "ramCapacity");
         rechaza("política de planificación desconocida", doc(GLOBAL_OK, COMPUTER_OK.replace("FCFS", "LIFO"), PROCESO_OK),
                 "no es una política conocida");
@@ -165,6 +173,19 @@ public class ProcesosJsonPrueba {
         check("el disco tiene 200 + 100 bloques", sim.computer.getDisk().getTotalBlocks() == 300
                 && sim.computer.getDisk().getSwapStart() == 200 && sim.computer.getDisk().getSwapBlockCount() == 100);
         check("el cabezal empieza en el bloque 50", sim.computer.getDisk().getCurrentHead() == 50);
+        check("sin 'headSpeed' ni 'initialDirection': 1 posición por ciclo y hacia los bloques mayores",
+                sim.computer.getDisk().getHeadSpeed() == 1
+                        && sim.computer.getDisk().getHeadDirection() == HeadDirection.UP);
+        ProcessesConfig rapido = ConfigStore.parseProcesses(doc(
+                GLOBAL_OK.replace("}", ",\"headSpeed\":5,\"initialDirection\":\"down\"}"), COMPUTER_OK, PROCESO_OK));
+        Simulation simRapida = SimulationFactory.createP2(rapido, archivos);
+        check("'headSpeed' e 'initialDirection' se aplican al disco",
+                simRapida.computer.getDisk().getHeadSpeed() == 5
+                        && simRapida.computer.getDisk().getHeadDirection() == HeadDirection.DOWN);
+        ProcessesConfig descritoDelEnunciado = SimulationFactory.describeProcesses(sim.computer, sim.clock);
+        check("con los valores por defecto, describe no escribe 'headSpeed' ni 'initialDirection'",
+                descritoDelEnunciado.globalConfig.headSpeed == null
+                        && descritoDelEnunciado.globalConfig.initialDirection == null);
         check("política de disco inicial FIFO", sim.computer.getDiskPolicyType() == DiskPolicyType.FIFO);
         check("política de planificación FCFS", sim.computer.getPolicy().getType() == SchedulingPolicyType.FCFS);
         check("RAM de 1024", sim.computer.getMemoryManager().getTotalMemory() == 1024);
@@ -191,7 +212,8 @@ public class ProcesosJsonPrueba {
 
     private static void guardarYVolverACargar() throws IOException {
         System.out.println("--- 5. Guardar y volver a cargar ---");
-        String texto = doc(GLOBAL_OK.replace("FIFO", "C-SCAN").replace("300", "250"),
+        String texto = doc(GLOBAL_OK.replace("FIFO", "C-SCAN").replace("300", "250")
+                        .replace("}", ",\"headSpeed\":4,\"initialDirection\":\"DOWN\"}"),
                 COMPUTER_OK.replace("FCFS", "ROUND_ROBIN").replace("\"quantum\":0", "\"quantum\":3"),
                 PROCESO_OK + ","
                 + "{\"name\":\"Nuevo\",\"memory\":8,\"deadline\":300,\"instructions\":3,\"targetPath\":\"/usuarios/tesis.pdf\","
@@ -214,6 +236,9 @@ public class ProcesosJsonPrueba {
                         && "C-SCAN".equals(descrito.globalConfig.initialDiskPolicy)
                         && descrito.computer.ramCapacity == 1024 && "ROUND_ROBIN".equals(descrito.computer.policy)
                         && descrito.computer.quantum == 3);
+        check("describe: velocidad y dirección del cabezal",
+                descrito.globalConfig.headSpeed != null && descrito.globalConfig.headSpeed == 4
+                        && "DOWN".equals(descrito.globalConfig.initialDirection));
         check("describe: los 6 procesos, en el orden en que se crearon", descrito.processes.length == 6
                 && "P".equals(descrito.processes[0].name) && "Lector".equals(descrito.processes[5].name));
         ProcessesConfig.ProcessEntry nuevo = descrito.processes[1];

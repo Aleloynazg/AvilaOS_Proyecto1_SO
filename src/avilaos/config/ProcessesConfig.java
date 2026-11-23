@@ -1,6 +1,7 @@
 package avilaos.config;
 
 import avilaos.hardware.disk.Disk;
+import avilaos.hardware.disk.HeadDirection;
 import avilaos.kernel.disk.DiskPolicyType;
 import avilaos.kernel.fs.NodeType;
 import avilaos.kernel.fs.Permission;
@@ -25,7 +26,9 @@ import avilaos.kernel.scheduler.SchedulingPolicyType;
  * </pre>
  *
  * Un proceso sin "type" es de E/S de archivos (como todos los del enunciado). Campos
- * opcionales: "priority" (1 a 10, por defecto 5), "newName" (UPDATE), "targetType",
+ * opcionales de "globalConfig": "headSpeed" (posiciones por ciclo, por defecto 1) e
+ * "initialDirection" (UP o DOWN). Campos opcionales de un proceso: "priority" (1 a 10,
+ * por defecto 5), "newName" (UPDATE), "targetType",
  * "blocks", "owner" y "permissions" (CREATE) y, para procesos de otros tipos, "type"
  * CPU_BOUND o IO_BOUND con "ioEvery" e "ioDuration".
  *
@@ -48,6 +51,10 @@ public class ProcessesConfig {
         public int swapSizeBlocks;
         /** FIFO, SSTF, SCAN, C-SCAN o LOOK. */
         public String initialDiskPolicy;
+        /** Opcional: posiciones que recorre el cabezal por ciclo (1 a 100; por defecto 1). */
+        public Integer headSpeed;
+        /** Opcional: UP (hacia los bloques mayores, por defecto) o DOWN. */
+        public String initialDirection;
     }
 
     public static class ComputerSection {
@@ -122,6 +129,10 @@ public class ProcessesConfig {
                 "cycleDurationMs");
         range(globalConfig.swapSizeBlocks, MIN_SWAP_BLOCKS, MAX_SWAP_BLOCKS, "swapSizeBlocks");
         parseDiskPolicy(globalConfig.initialDiskPolicy);
+        if (globalConfig.headSpeed != null) {
+            range(globalConfig.headSpeed, Disk.MIN_HEAD_SPEED, Disk.MAX_HEAD_SPEED, "headSpeed");
+        }
+        parseDirection(globalConfig.initialDirection);
         range(computer.ramCapacity, SimulationConfig.MIN_RAM, SimulationConfig.MAX_RAM, "ramCapacity");
         SchedulingPolicyType policy = parseSchedulingPolicy(computer.policy);
         if (policy == SchedulingPolicyType.ROUND_ROBIN) {
@@ -239,6 +250,17 @@ public class ProcessesConfig {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("El campo 'initialDiskPolicy': " + e.getMessage());
         }
+    }
+
+    /** UP (hacia los bloques mayores) o DOWN; sin valor, UP. */
+    public static HeadDirection parseDirection(String value) {
+        if (value == null || value.trim().isEmpty() || value.trim().equalsIgnoreCase("UP")) {
+            return HeadDirection.UP;
+        }
+        if (value.trim().equalsIgnoreCase("DOWN")) {
+            return HeadDirection.DOWN;
+        }
+        throw new IllegalArgumentException("El campo 'initialDirection' debe ser UP o DOWN (valor: " + value + ")");
     }
 
     private static ProcessType parseProcessType(String value, String where) {
