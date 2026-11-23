@@ -52,6 +52,13 @@ public class Disk implements ClockListener{
     private int currentHead;
     private HeadDirection headDirection;
 
+    /** Límites de la velocidad del cabezal (posiciones por ciclo). */
+    public static final int MIN_HEAD_SPEED = 1;
+    public static final int MAX_HEAD_SPEED = 100;
+
+    /** Posiciones que recorre el cabezal por ciclo de reloj (configurable, por defecto 1). */
+    private int headSpeed = MIN_HEAD_SPEED;
+
     private DiskScheduler scheduler;
 
     /** Disco con los tamaños por defecto: 200 bloques de archivos y 100 de swap. */
@@ -218,21 +225,35 @@ public class Disk implements ClockListener{
         return freeBlocks;
     }
     /**
-    * Mueve el cabezal un bloque en la dirección indicada.
+    * Mueve el cabezal en la dirección indicada, headSpeed posiciones por ciclo
+    * sin salirse del disco.
     */
     private void moveHead(HeadDirection direction) {
+        moveHead(direction, headSpeed);
+    }
 
-        if (direction == HeadDirection.UP
-                && currentHead < totalBlocks - 1) {
+    /**
+    * Mueve el cabezal en la dirección indicada, como máximo maxSteps posiciones
+    * (para no pasarse del bloque destino) y nunca más de headSpeed ni más allá
+    * de los extremos del disco. Cada posición recorrida suma al desplazamiento total.
+    */
+    private void moveHead(HeadDirection direction, int maxSteps) {
 
-            currentHead++;
-            totalHeadMovement++;
+        int steps = Math.min(headSpeed, maxSteps);
 
-        } else if (direction == HeadDirection.DOWN
-                && currentHead > 0) {
+        if (direction == HeadDirection.UP) {
+            steps = Math.min(steps, totalBlocks - 1 - currentHead);
+            if (steps > 0) {
+                currentHead += steps;
+                totalHeadMovement += steps;
+            }
 
-            currentHead--;
-            totalHeadMovement++;
+        } else if (direction == HeadDirection.DOWN) {
+            steps = Math.min(steps, currentHead);
+            if (steps > 0) {
+                currentHead -= steps;
+                totalHeadMovement += steps;
+            }
         }
     }
 
@@ -341,10 +362,10 @@ public class Disk implements ClockListener{
             int targetBlock = currentRequest.getTargetBlock();
 
             if (currentHead < targetBlock) {
-                moveHead(HeadDirection.UP);
+                moveHead(HeadDirection.UP, targetBlock - currentHead);
 
             } else if (currentHead > targetBlock) {
-                moveHead(HeadDirection.DOWN);
+                moveHead(HeadDirection.DOWN, currentHead - targetBlock);
             }
 
             // Si llegó al bloque solicitado, comienza la transferencia.
@@ -588,6 +609,26 @@ public class Disk implements ClockListener{
             this.headDirection = headDirection;
         }
     }
+
+    /** Velocidad del cabezal: posiciones que recorre por ciclo de reloj. */
+    public int getHeadSpeed() {
+        return headSpeed;
+    }
+
+    /**
+     * Cambia la velocidad del cabezal.
+     *
+     * @param headSpeed posiciones por ciclo, entre MIN_HEAD_SPEED y MAX_HEAD_SPEED
+     * @throws IllegalArgumentException si está fuera de rango
+     */
+    public void setHeadSpeed(int headSpeed) {
+        if (headSpeed < MIN_HEAD_SPEED || headSpeed > MAX_HEAD_SPEED) {
+            throw new IllegalArgumentException("La velocidad del cabezal debe estar entre "
+                    + MIN_HEAD_SPEED + " y " + MAX_HEAD_SPEED + " posiciones por ciclo");
+        }
+        this.headSpeed = headSpeed;
+    }
+
     @Override
     public void onTick(long cycle) {
 
