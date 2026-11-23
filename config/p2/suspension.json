@@ -1,0 +1,44 @@
+{
+  "globalConfig": {
+    "cycleDurationMs": 300,
+    "swapSizeBlocks": 100,
+    "initialDiskPolicy": "FIFO",
+    "headSpeed": 10
+  },
+  "computer": {
+    "ramCapacity": 128,
+    "policy": "FCFS",
+    "quantum": 0
+  },
+  "processes": [
+    {
+      "name": "Lector_1",
+      "type": "IO_BOUND",
+      "memory": 50,
+      "deadline": 3000,
+      "instructions": 8,
+      "priority": 8,
+      "ioEvery": 2,
+      "ioDuration": 100
+    },
+    {
+      "name": "Lector_2",
+      "type": "IO_BOUND",
+      "memory": 50,
+      "deadline": 3000,
+      "instructions": 8,
+      "priority": 6,
+      "ioEvery": 3,
+      "ioDuration": 100
+    },
+    {
+      "name": "Urgente",
+      "memory": 90,
+      "deadline": 3000,
+      "instructions": 2,
+      "priority": 1,
+      "targetPath": "/sistema/config.sys",
+      "operation": "READ"
+    }
+  ]
+}
