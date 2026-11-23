@@ -31,6 +31,11 @@ import avilaos.kernel.swap.SwapArea;
  *       Nuevo, de mayor a menor prioridad, y se detiene en el primero que no cabe (para que un
  *       proceso grande no espere mientras pasan los pequeños). La RAM se reserva al generar la
  *       solicitud RESUME; cuando el disco termina de leer el swap el proceso pasa a Listos.</li>
+ *   <li><b>Excepción:</b> mientras haya suspensiones en curso no se reactiva a nadie. Esa RAM se
+ *       está liberando a propósito para el proceso Nuevo que no cabía; si los suspendidos
+ *       volvieran antes (porque su espera termina antes de que el disco acabe con los demás),
+ *       el Nuevo nunca entraría y el sistema solo gastaría disco yendo y viniendo. Al terminar
+ *       la última suspensión se admite primero al Nuevo y después se reactiva con lo que sobre.</li>
  * </ul>
  */
 public class MediumTermScheduler {
@@ -136,8 +141,8 @@ public class MediumTermScheduler {
      */
     public void reactivate(long cycle) {
         DiskScheduler scheduler = diskScheduler();
-        if (scheduler == null) {
-            return;
+        if (scheduler == null || pendingSuspendMemory > 0) {
+            return;     // (con suspensiones en curso la RAM que se libera es para el proceso Nuevo)
         }
         while (true) {
             PCB best = null;

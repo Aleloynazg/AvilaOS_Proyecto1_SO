@@ -212,7 +212,37 @@ public class MediumTermSchedulerPrueba {
                 ram.getUsedMemory() == 0 && kernel.getSwap().getUsedBlocks() == 0 && diskScheduler.getRequestCount() == 0);
         check("no se cuenta como reactivación", kernel.getReactivationCount() == 0);
 
-        System.out.println("--- 13. Sin disco no hay planificador a mediano plazo ---");
+        System.out.println("--- 13. Con suspensiones en curso no se reactiva a nadie ---");
+        montar(100, 100);
+        PCB m1 = admitido("M1", 7, 40);
+        PCB m2 = admitido("M2", 6, 40);
+        bloquear(m1);
+        bloquear(m2);
+        PCB gran = nuevo("Gran", 1, 90);
+        kernel.admitNewProcesses(cycle);
+        check("hace falta suspender a los dos (20 + 40 + 40 = 100 para 90)", m1.isSuspending() && m2.isSuspending()
+                && diskScheduler.getRequestCount() == 2);
+        ciclos(1);   // el disco toma la solicitud de M1 (la primera)
+        ciclos(60);  // ... y la termina; la de M2 está en curso o ya terminada según el disco
+        check("M1 ya está suspendido", m1.getState() == ProcessState.BLOCKED_SUSPENDED);
+        kernel.unblockProcess(m1, cycle);
+        check("M1 despierta: Listo suspendido", m1.getState() == ProcessState.READY_SUSPENDED);
+        check("la suspensión de M2 sigue en curso (40 MB por liberar)",
+                kernel.getMediumTermScheduler().getPendingSuspendMemory() == 40 && ram.getFreeMemory() == 60);
+        kernel.admitNewProcesses(cycle);
+        check("con la suspensión de M2 en curso, M1 NO se reactiva aunque haya 60 MB libres",
+                !m1.isResuming() && m1.getState() == ProcessState.READY_SUSPENDED
+                        && diskScheduler.getRequestCount() == 0);
+        ciclos(80);
+        check("al terminar M2 entra Gran con la RAM de los dos (90 usados)",
+                gran.getState() == ProcessState.READY && ram.getUsedMemory() == 90 && kernel.getSuspensionCount() == 2);
+        check("M1 sigue esperando (40 MB no caben junto a Gran: quedan 10) y nadie se reactivó",
+                m1.getState() == ProcessState.READY_SUSPENDED && !m1.isResuming() && kernel.getReactivationCount() == 0);
+        kernel.terminateProcess(gran, TerminationCause.COMPLETED, cycle);
+        check("cuando termina Gran, M1 vuelve (prioridad 7) y M2 sigue suspendido por su espera",
+                m1.isResuming() && m2.getState() == ProcessState.BLOCKED_SUSPENDED);
+
+        System.out.println("--- 14. Sin disco no hay planificador a mediano plazo ---");
         Kernel sinDisco = new Kernel(1, new MemoryManager(100));
         check("el kernel sin disco no tiene planificador ni swap",
                 sinDisco.getMediumTermScheduler() == null && sinDisco.getSwap() == null
