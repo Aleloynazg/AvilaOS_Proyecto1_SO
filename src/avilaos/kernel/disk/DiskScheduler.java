@@ -60,16 +60,19 @@ public class DiskScheduler {
      * el proceso terminó por deadline mientras esperaba). No toca la solicitud que el disco
      * ya está atendiendo, porque esa ya salió de la cola.
      *
-     * @return cuántas solicitudes se cancelaron
+     * @return las solicitudes que se cancelaron (para que el kernel libere lo que reservaron)
      */
-    public int cancelRequestsOf(PCB process) {
-        int cancelled = 0;
+    public DiskRequest[] cancelRequestsOf(PCB process) {
+        DiskRequest[] cancelled = new DiskRequest[0];
         Object[] pending = requests.toArray();
         for (Object o : pending) {
             DiskRequest request = (DiskRequest) o;
             if (request.getProcess() == process && requests.remove(request)) {
                 availableRequests.tryAcquire();   // el semáforo cuenta las solicitudes en cola
-                cancelled++;
+                DiskRequest[] bigger = new DiskRequest[cancelled.length + 1];
+                System.arraycopy(cancelled, 0, bigger, 0, cancelled.length);
+                bigger[cancelled.length] = request;
+                cancelled = bigger;
             }
         }
         return cancelled;
