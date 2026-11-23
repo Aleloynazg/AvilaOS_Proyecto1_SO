@@ -1,34 +1,39 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package avilaos.kernel.fs;
 
 /**
- * Representa un archivo dentro del sistema de archivos.
- * @author alexandraloynaz
+ * Archivo del sistema de archivos.
+ *
+ * No guarda contenido: el enunciado pide simular solo la estructura y los
+ * bloques. Su ubicación en el disco es el primer bloque de una cadena
+ * (asignación encadenada) y la cantidad de bloques que ocupa.
  */
 public class FileEntry extends FsNode {
 
-    private String content;
+    private int startBlock = -1;
+    private int blocks;
 
     public FileEntry(String name, Permission permission,
                      Directory parent) {
-
         super(name, NodeType.FILE, permission, parent);
-
-        content = "";
     }
 
-    public String getContent() {
-        return content;
+    /** Registra dónde quedó el archivo en el disco. */
+    public void setLocation(int startBlock, int blocks) {
+        this.startBlock = startBlock;
+        this.blocks = blocks;
     }
 
-    public void setContent(String content) {
-        this.content = content;
+    public int getStartBlock() {
+        return startBlock;
     }
 
-    public int getSize() {
-        return content.length();
+    @Override
+    public int getFirstBlock() {
+        return startBlock;
+    }
+
+    @Override
+    public int getBlockCount() {
+        return blocks;
     }
 }
