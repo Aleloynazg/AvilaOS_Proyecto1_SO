@@ -528,6 +528,35 @@ public class Disk implements ClockListener{
     }
 
     /**
+     * Asigna a un archivo exactamente los bloques indicados, enlazados en ese orden
+     * (asignación encadenada con bloques que no tienen que ser consecutivos).
+     * Sirve para volver a cargar un archivo que quedó fragmentado.
+     *
+     * @return true si todos los bloques existen en la zona de archivos, no se repiten
+     *         y están libres; si no, no cambia nada y devuelve false
+     */
+    public boolean allocateFileOn(FileEntry file, int[] chain) {
+        if (file == null || chain == null || chain.length == 0) {
+            return false;
+        }
+        for (int i = 0; i < chain.length; i++) {
+            if (chain[i] < fileSystemStart || chain[i] > fileSystemEnd || !blocks[chain[i]].isFree()) {
+                return false;
+            }
+            for (int j = 0; j < i; j++) {
+                if (chain[j] == chain[i]) {
+                    return false;
+                }
+            }
+        }
+        for (int i = 0; i < chain.length; i++) {
+            blocks[chain[i]].setFile(file);
+            blocks[chain[i]].setNext(i + 1 < chain.length ? chain[i + 1] : -1);
+        }
+        return true;
+    }
+
+    /**
      * Libera todos los bloques de la cadena que empieza en firstBlock.
      *
      * @return cuántos bloques se liberaron

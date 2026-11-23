@@ -39,4 +39,45 @@ public final class ConfigStore {
         config.validate();
         return config;
     }
+
+    /**
+     * Lee y valida el JSON del sistema de archivos (formato del enunciado).
+     *
+     * @throws IOException si no se puede leer el archivo
+     * @throws IllegalArgumentException si el JSON está mal formado o tiene valores inválidos
+     */
+    public static FileSystemConfig loadFileSystem(File file) throws IOException {
+        String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        FileSystemConfig config = parseFileSystem(text);
+        config.validate();
+        return config;
+    }
+
+    /** Convierte el texto de un JSON de sistema de archivos en su configuración (sin validar). */
+    public static FileSystemConfig parseFileSystem(String text) {
+        FileSystemConfig config;
+        try {
+            config = GSON.fromJson(text, FileSystemConfig.class);
+        } catch (JsonParseException e) {
+            String detalle = e.getCause() != null && e.getCause().getMessage() != null
+                    ? e.getCause().getMessage() : e.getMessage();
+            throw new IllegalArgumentException("El archivo del sistema de archivos no es un JSON válido: "
+                    + detalle);
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("El archivo del sistema de archivos está vacío");
+        }
+        return config;
+    }
+
+    /** Guarda el estado del sistema de archivos en el formato del enunciado. */
+    public static void saveFileSystem(FileSystemConfig config, File file) throws IOException {
+        config.validate();
+        Files.writeString(file.toPath(), toJson(config), StandardCharsets.UTF_8);
+    }
+
+    /** Texto JSON (con sangría) de una configuración de sistema de archivos. */
+    public static String toJson(FileSystemConfig config) {
+        return GSON.toJson(config);
+    }
 }
