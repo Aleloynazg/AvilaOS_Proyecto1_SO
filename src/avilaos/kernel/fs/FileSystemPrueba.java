@@ -1,19 +1,28 @@
 package avilaos.kernel.fs;
 
+import avilaos.config.ConfigStore;
+import avilaos.config.FileSystemConfig;
 import avilaos.hardware.disk.Disk;
+import avilaos.kernel.process.IoOperation;
+import java.io.File;
+import java.io.IOException;
 
 /**
- * Prueba del sistema de archivos (F2.1 y F2.2): crear, renombrar y eliminar
- * archivos y directorios sobre el disco, con asignación encadenada.
+ * Prueba del sistema de archivos (F2.1, F2.2 y F2.5): crear, renombrar y eliminar
+ * archivos y directorios sobre el disco, con asignación encadenada. Las secciones 8 y 9
+ * usan el JSON del enunciado (config/p2/sistema_archivos_enunciado.json, que llena los
+ * 200 bloques del disco), así que hay que ejecutarla desde la carpeta del proyecto.
  *
  * Se ejecuta como programa normal. Termina con código 1 si algo falla.
  */
 public class FileSystemPrueba {
 
+    private static final String ENUNCIADO = "config/p2/sistema_archivos_enunciado.json";
+
     private static int fallos = 0;
     private static int comprobaciones = 0;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         arbolYCreacion();
         asignacionEncadenada();
         renombrar();
@@ -21,6 +30,8 @@ public class FileSystemPrueba {
         discoLleno();
         archivosDelJson();
         recorridoYColores();
+        operacionesConElJsonDelEnunciado();
+        permisosConElJsonDelEnunciado();
 
         System.out.println();
         System.out.println("Comprobaciones: " + comprobaciones + " | Fallos: " + fallos);
@@ -212,6 +223,100 @@ public class FileSystemPrueba {
                 vacio.getColorIndex() != carpeta.getColorIndex()
                 && uno.getColorIndex() != dos.getColorIndex()
                 && carpeta.getColorIndex() != uno.getColorIndex());
+    }
+
+    /** Sistema de archivos del enunciado ya cargado: 9 archivos, 2 directorios, disco lleno. */
+    private static FileSystem cargarEnunciado(Disk disk) throws IOException {
+        FileSystemConfig config = ConfigStore.loadFileSystem(new File(ENUNCIADO));
+        FileSystem fs = new FileSystem(disk);
+        config.populate(fs);
+        return fs;
+    }
+
+    private static void operacionesConElJsonDelEnunciado() throws IOException {
+        System.out.println("--- 8. Operaciones sobre el JSON del enunciado ---");
+        Disk disk = new Disk(200, 100);
+        FileSystem fs = cargarEnunciado(disk);
+        verificar("Punto de partida: 9 archivos, 2 directorios y el disco lleno",
+                fs.countFiles() == 9 && fs.countDirectories() == 2 && disk.countFreeFileBlocks() == 0);
+
+        // El disco del ejemplo está lleno: crear siempre falla hasta liberar espacio.
+        esperaError("CREATE con el disco lleno", "necesita 1 y quedan 0",
+                () -> fs.createFile("/sistema/nuevo.bin", 1, "admin", Permission.PUBLIC, "Proc_new"));
+
+        // Borrar img1.png (bloques 119 a 122) y reusar ese espacio.
+        verificar("DELETE de img1.png libera sus 4 bloques", fs.delete("/usuarios/img1.png") == 4
+                && disk.countFreeFileBlocks() == 4);
+        FileEntry nuevo = fs.createFile("/usuarios/nuevo.dat", 4, "user1", Permission.PUBLIC, "Proc_new");
+        verificar("El archivo nuevo ocupa justo los bloques liberados (119 a 122)",
+                nuevo.getStartBlock() == 119 && disk.countFreeFileBlocks() == 0);
+        esperaError("Otro CREATE vuelve a fallar", "quedan 0",
+                () -> fs.createFile("/usuarios/otro.dat", 1, "user1", Permission.PUBLIC, "Proc_new"));
+
+        // Renombrar no mueve bloques.
+        fs.rename("/usuarios/notas.txt", "notas_v2.txt");
+        FileEntry notas = (FileEntry) fs.findByPath("/usuarios/notas_v2.txt");
+        verificar("UPDATE (renombrar) notas.txt: sigue en el bloque 34 con 28 bloques",
+                notas != null && notas.getStartBlock() == 34 && notas.getBlockCount() == 28
+                && fs.findByPath("/usuarios/notas.txt") == null);
+
+        // Directorio recursivo: /sistema tiene boot.bin (23), script.py (2), core.dll (31) y config.sys (24).
+        int liberados = fs.delete("/sistema");
+        verificar("DELETE de /sistema (recursivo) libera 80 bloques", liberados == 80
+                && disk.countFreeFileBlocks() == 80);
+        verificar("Ya no existe nada de /sistema", fs.findByPath("/sistema") == null
+                && fs.findByPath("/sistema/core.dll") == null && fs.countDirectories() == 1);
+
+        // Un archivo grande usa los huecos: 11..33 (23 bloques) y luego 62..98 (37 bloques).
+        FileEntry grande = fs.createFile("/grande.bin", 60, "admin", Permission.PUBLIC, "Proc_big");
+        int[] cadena = disk.getChain(grande.getStartBlock());
+        verificar("Un archivo de 60 bloques se reparte en los huecos (11..33 y 62..98)",
+                grande.getStartBlock() == 11 && cadena.length == 60 && cadena[22] == 33
+                && cadena[23] == 62 && cadena[59] == 98);
+        verificar("Quedan 20 bloques libres", disk.countFreeFileBlocks() == 20);
+
+        // /usuarios completo: notas_v2 (28), data.csv (57), video.mp4 (20), nuevo.dat (4) = 109.
+        verificar("DELETE de /usuarios (recursivo) libera 109 bloques", fs.delete("/usuarios") == 109);
+        verificar("Quedan mbr.bin (11) y grande.bin (60): 71 bloques ocupados",
+                fs.getUsedBlocks() == 71 && fs.countFiles() == 2 && fs.countDirectories() == 0);
+    }
+
+    private static void permisosConElJsonDelEnunciado() throws IOException {
+        System.out.println("--- 9. Permisos sobre el JSON del enunciado ---");
+        FileSystem fs = cargarEnunciado(new Disk(200, 100));
+        AccessControl acceso = new AccessControl();
+        acceso.setUserMode("user1");
+
+        verificar("user1 lee su archivo privado notas.txt",
+                acceso.check(fs, IoOperation.READ, "/usuarios/notas.txt", NodeType.FILE) == null);
+        verificar("user1 lee data.csv (de user2, pero público)",
+                acceso.check(fs, IoOperation.READ, "/usuarios/data.csv", NodeType.FILE) == null);
+        verificar("user1 lee un archivo del sistema",
+                acceso.check(fs, IoOperation.READ, "/sistema/boot.bin", NodeType.FILE) == null);
+        String creacion = acceso.check(fs, IoOperation.CREATE, "/usuarios/nuevo.txt", NodeType.FILE);
+        verificar("user1 no puede crear en /usuarios (es un directorio de admin) -> " + creacion,
+                creacion != null && creacion.contains("propios directorios"));
+        String borrado = acceso.check(fs, IoOperation.DELETE, "/usuarios/data.csv", NodeType.FILE);
+        verificar("user1 no puede eliminar data.csv (es de user2) -> " + borrado,
+                borrado != null && borrado.contains("pertenece a user2"));
+        verificar("user1 elimina su video.mp4",
+                acceso.check(fs, IoOperation.DELETE, "/usuarios/video.mp4", NodeType.FILE) == null);
+        String renombrado = acceso.check(fs, IoOperation.UPDATE, "/usuarios/notas.txt", NodeType.FILE);
+        verificar("user1 no puede renombrar -> " + renombrado,
+                renombrado != null && renombrado.contains("Solo el administrador"));
+
+        acceso.setUserMode("user2");
+        String lectura = acceso.check(fs, IoOperation.READ, "/usuarios/notas.txt", NodeType.FILE);
+        verificar("user2 no puede leer notas.txt (privado de user1) -> " + lectura,
+                lectura != null && lectura.contains("privado"));
+        verificar("user2 sí lee video.mp4 (público de user1)",
+                acceso.check(fs, IoOperation.READ, "/usuarios/video.mp4", NodeType.FILE) == null);
+
+        acceso.setAdminMode();
+        verificar("El administrador puede todo: leer lo privado, renombrar y eliminar",
+                acceso.check(fs, IoOperation.READ, "/usuarios/notas.txt", NodeType.FILE) == null
+                && acceso.check(fs, IoOperation.UPDATE, "/usuarios/notas.txt", NodeType.FILE) == null
+                && acceso.check(fs, IoOperation.DELETE, "/usuarios", NodeType.DIRECTORY) == null);
     }
 
     // ------------------------------------------------------------------
