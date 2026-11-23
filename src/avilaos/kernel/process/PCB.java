@@ -1,5 +1,9 @@
 package avilaos.kernel.process;
 
+import avilaos.kernel.fs.FsNode;
+import avilaos.kernel.fs.NodeType;
+import avilaos.kernel.fs.Permission;
+
 /**
  * Bloque de control de proceso. ÁvilaOS es monohilo por proceso, así que el
  * PCB integra el TCB (relación 1:1).
@@ -37,6 +41,15 @@ public class PCB {
     // ---- Parámetros por tipo ----
     private int ioEveryCycles;              // I/O bound: cada cuántas instrucciones pide E/S
     private int ioDurationCycles;           // I/O bound: cuánto dura la E/S
+
+    // ---- Operación de archivos (solo procesos FILE_IO) ----
+    private IoOperation ioOperation;                       // null si no es un proceso de E/S de archivos
+    private String targetPath;                             // ruta del archivo o directorio sobre el que trabaja
+    private String newName;                                // UPDATE: nombre nuevo (null = lo elige el kernel)
+    private NodeType targetType = NodeType.FILE;           // CREATE: archivo o directorio
+    private int fileBlocks;                                // CREATE de archivo: tamaño en bloques
+    private String ioOwner = FsNode.DEFAULT_OWNER;         // CREATE: dueño del elemento nuevo
+    private Permission ioPermission = Permission.PUBLIC;   // CREATE: permiso del elemento nuevo
 
     // ---- Métricas ----
     private long arrivalCycle = -1;
@@ -127,6 +140,14 @@ public class PCB {
     public int getCurrentStep() { return currentStep; }
     public int getIoEveryCycles() { return ioEveryCycles; }
     public int getIoDurationCycles() { return ioDurationCycles; }
+    public IoOperation getIoOperation() { return ioOperation; }
+    public String getTargetPath() { return targetPath; }
+    public String getNewName() { return newName; }
+    public NodeType getTargetType() { return targetType; }
+    public int getFileBlocks() { return fileBlocks; }
+    public String getIoOwner() { return ioOwner; }
+    public Permission getIoPermission() { return ioPermission; }
+    public boolean isFileIo() { return type == ProcessType.FILE_IO; }
     public long getArrivalCycle() { return arrivalCycle; }
     public long getFirstRunCycle() { return firstRunCycle; }
     public long getFinishCycle() { return finishCycle; }
@@ -142,10 +163,32 @@ public class PCB {
         this.ioEveryCycles = everyCycles;
         this.ioDurationCycles = durationCycles;
     }
+    /**
+     * Fija la operación de archivos que hace este proceso (ver {@link ProcessFactory#fileIo}).
+     * El enunciado pide que el PCB lleve la operación solicitada y la ruta del archivo.
+     */
+    public void setFileOperation(IoOperation operation, String path, String newName,
+                                 NodeType targetType, int blocks, String owner, Permission permission) {
+        this.ioOperation = operation;
+        this.targetPath = path;
+        this.newName = newName;
+        this.targetType = targetType == null ? NodeType.FILE : targetType;
+        this.fileBlocks = blocks;
+        this.ioOwner = owner == null || owner.trim().isEmpty() ? FsNode.DEFAULT_OWNER : owner.trim();
+        this.ioPermission = permission == null ? Permission.PUBLIC : permission;
+    }
     public void setArrivalCycle(long cycle) { this.arrivalCycle = cycle; }
     public void markFirstRun(long cycle) { if (firstRunCycle < 0) firstRunCycle = cycle; }
     public void incrementCyclesOnCpu() { cyclesOnCpu++; }
     public void incrementCyclesWaitingReady() { cyclesWaitingReady++; }
+
+    /** Texto corto de la operación para tablas y log, por ejemplo "READ /sistema/boot.bin"; "-" si no tiene. */
+    public String describeOperation() {
+        if (ioOperation == null) {
+            return "-";
+        }
+        return ioOperation.name() + " " + targetPath;
+    }
 
     @Override
     public String toString() {

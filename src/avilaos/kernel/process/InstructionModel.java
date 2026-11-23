@@ -15,6 +15,8 @@ public final class InstructionModel {
         switch (p.getType()) {
             case IO_BOUND:
                 return nextIoBound(p, n);
+            case FILE_IO:
+                return nextFileIo(n);
             default:
                 return new Instruction(InstructionType.NORMAL);
         }
@@ -29,5 +31,13 @@ public final class InstructionModel {
             return new Instruction(InstructionType.IO_REQUEST);
         }
         return new Instruction(InstructionType.NORMAL);
+    }
+
+    /**
+     * Un proceso de E/S de archivos pide su operación al disco en la primera instrucción
+     * (modo sistema operativo, según el enunciado); las demás son normales.
+     */
+    private static Instruction nextFileIo(int n) {
+        return new Instruction(n == 0 ? InstructionType.DISK_REQUEST : InstructionType.NORMAL);
     }
 }

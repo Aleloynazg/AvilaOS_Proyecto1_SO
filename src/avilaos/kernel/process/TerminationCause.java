@@ -4,5 +4,7 @@ package avilaos.kernel.process;
 public enum TerminationCause {
     NONE,
     COMPLETED,
-    DEADLINE_MISSED
+    DEADLINE_MISSED,
+    /** La operación sobre el sistema de archivos no se pudo hacer (no existe, no hay espacio, nombre repetido...). */
+    IO_FAILED
 }
