@@ -125,6 +125,22 @@ public class FileSystem {
     }
 
     /**
+     * Revisa, sin crear nada, que se pueda crear un elemento en esa ruta: nombre válido,
+     * carpeta padre existente y nombre libre. Lo usa el kernel para rechazar una operación
+     * CREATE antes de mandarla al disco.
+     *
+     * @throws FileSystemException con el motivo si no se puede
+     */
+    public void checkCanCreate(String path) {
+        mutex.acquireUninterruptibly();
+        try {
+            parentForNewNode(path);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
      * Crea un archivo y le asigna una cadena de bloques libres del disco
      * (los primeros que encuentre; no tienen que ser consecutivos).
      *

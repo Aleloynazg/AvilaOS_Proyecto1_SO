@@ -31,6 +31,10 @@ import avilaos.hardware.disk.Disk;
 import avilaos.kernel.disk.DiskScheduler;
 import avilaos.kernel.disk.DiskPolicyFactory;
 import avilaos.kernel.disk.DiskPolicyType;
+import avilaos.kernel.fs.AccessControl;
+import avilaos.kernel.fs.FileSystem;
+import avilaos.kernel.fs.NodeType;
+import avilaos.kernel.process.IoOperation;
 
 
 
@@ -46,6 +50,10 @@ public class Computer implements ClockListener {
     private boolean instruccionEjecutada;
     private final Disk disk;
     private final DiskScheduler diskScheduler;
+    private final FileSystem fileSystem;
+    private final AccessControl accessControl;
+    /** Último ciclo que vio este computador (para fechar los eventos que no vienen del reloj). */
+    private volatile long lastCycle;
  /**
      * Construye un computador e inicializa sus componentes.
      *
@@ -59,10 +67,25 @@ public class Computer implements ClockListener {
      */
     
     public Computer(int id, int capacidadRAM) {
+        this(id, capacidadRAM, new Disk());
+    }
+
+    /**
+     * Construye un computador con el disco indicado (por ejemplo, uno con el tamaño y el
+     * área de intercambio que vienen en los JSON). El computador crea sobre ese disco su
+     * sistema de archivos, vacío y en modo administrador, con política de disco FIFO.
+     *
+     * @param disk disco del computador
+     * @throws IllegalArgumentException si el identificador no es positivo o falta el disco
+     */
+    public Computer(int id, int capacidadRAM, Disk disk) {
         if (id <= 0) {
             throw new IllegalArgumentException(
                 "El identificador debe ser mayor que cero."
             );
+        }
+        if (disk == null) {
+            throw new IllegalArgumentException("El computador necesita un disco.");
         }
 
         this.id = id;
@@ -80,9 +103,12 @@ public class Computer implements ClockListener {
         DiskPolicyFactory.create(DiskPolicyType.FIFO)
         );
 
-        this.disk = new Disk();
+        this.disk = disk;
         this.disk.setKernel(kernel);
         this.disk.setScheduler(diskScheduler);
+        this.fileSystem = new FileSystem(disk);
+        this.accessControl = new AccessControl();
+        this.kernel.setStorage(disk, fileSystem);
 
         this.cpu.setEventListener((cycle, message) -> {
             kernel.reportEvent(cycle, message);
@@ -120,6 +146,50 @@ public class Computer implements ClockListener {
      */
     public Kernel getKernel() {
         return kernel;
+    }
+    /** Disco del computador (bloques, cabezal y métricas). */
+    public Disk getDisk() {
+        return disk;
+    }
+    /** Planificador de la cola de E/S del disco. */
+    public DiskScheduler getDiskScheduler() {
+        return diskScheduler;
+    }
+    /** Sistema de archivos del computador. */
+    public FileSystem getFileSystem() {
+        return fileSystem;
+    }
+    /** Modo de uso (administrador o usuario) y las reglas de permisos. */
+    public AccessControl getAccessControl() {
+        return accessControl;
+    }
+
+    /** Política de planificación de disco en uso. */
+    public DiskPolicyType getDiskPolicyType() {
+        return diskScheduler.getPolicy().getType();
+    }
+
+    /**
+     * Cambia la política de planificación de disco, también mientras el sistema está
+     * ejecutando: las solicitudes que ya esperan en la cola se atienden con la política nueva.
+     */
+    public void setDiskPolicy(DiskPolicyType type) {
+        DiskPolicyType before = getDiskPolicyType();
+        diskScheduler.setPolicy(DiskPolicyFactory.create(type));
+        if (before != type) {
+            kernel.reportEvent(lastCycle, "La política de disco cambia de " + before.getLabel()
+                    + " a " + type.getLabel());
+        }
+    }
+
+    /**
+     * Revisa si el modo de uso actual permite una operación de archivos, antes de crear el
+     * proceso que la hará (la interfaz solo crea el proceso, nunca opera directamente).
+     *
+     * @return null si está permitida; si no, el motivo en español para mostrárselo al usuario
+     */
+    public String checkFileOperation(IoOperation operation, String path, NodeType createType) {
+        return accessControl.check(fileSystem, operation, path, createType);
     }
         /**
      * Muestra por consola el estado actual del computador,
@@ -172,6 +242,7 @@ public class Computer implements ClockListener {
      */
     @Override
     public void onTick(long ciclo) {
+        lastCycle = ciclo;
         instruccionEjecutada = false;
 
         try {
@@ -302,8 +373,33 @@ public class Computer implements ClockListener {
             return;
         }
 
-        // Las instrucciones de modo sistema operativo (en el Proyecto 2,
-        // DISK_REQUEST) se ejecutan en modo KERNEL. La F3.2 las conecta al disco.
+        // DISK_REQUEST: el proceso pide su operación de archivos al disco. Se ejecuta en
+        // modo KERNEL, el proceso libera la CPU y queda bloqueado hasta que el disco la
+        // atienda (o termina con IO_FAILED si la operación no se puede hacer).
+        if (instruccion.getType() == InstructionType.DISK_REQUEST) {
+            instruccionEjecutada = true;
+            cpu.setMode(CpuMode.KERNEL);
+
+            procesoActual.advance();
+            procesoActual.incrementCyclesOnCpu();
+            procesoActual.markFirstRun(ciclo);
+
+            kernel.reportEvent(
+                ciclo,
+                "Modo KERNEL: " + procesoActual.getTag()
+                + " ejecuta " + instruccion
+                + " (" + procesoActual.describeOperation() + ")"
+                + " | PC: " + procesoActual.getProgramCounter()
+            );
+
+            cpu.releaseProcess();
+            cyclesCPU = 0;
+            kernel.submitFileRequest(procesoActual, ciclo);
+            return;
+        }
+
+        // Las demás instrucciones de modo sistema operativo se ejecutan en modo KERNEL
+        // sin bloquear al proceso.
         if (instruccion.isKernelMode()) {
             instruccionEjecutada = true;
             cpu.setMode(CpuMode.KERNEL);
