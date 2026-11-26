@@ -51,6 +51,8 @@ public class PCBDetails extends JDialog {
     private final JLabel ciclosBloqueo = new JLabel();
     private final JLabel frecuenciaIO = new JLabel();
     private final JLabel duracionIO = new JLabel();
+    private final JLabel operacionArchivo = new JLabel();
+    private final JLabel bloqueSwap = new JLabel();
 
     private final Timer actualizador;
 
@@ -91,6 +93,8 @@ public class PCBDetails extends JDialog {
         agregarCampo(contenido, "Ciclos de bloqueo restantes:", ciclosBloqueo);
         agregarCampo(contenido, "Frecuencia de E/S:", frecuenciaIO);
         agregarCampo(contenido, "Duración de E/S:", duracionIO);
+        agregarCampo(contenido, "Operación de archivo:", operacionArchivo);
+        agregarCampo(contenido, "Swap (bloque inicial):", bloqueSwap);
 
         add(new JScrollPane(contenido), BorderLayout.CENTER);
 
@@ -152,5 +156,10 @@ public class PCBDetails extends JDialog {
                 "Cada " + proceso.getIoEveryCycles() + " ciclos");
         duracionIO.setText(
                 proceso.getIoDurationCycles() + " ciclos");
+
+        operacionArchivo.setText(proceso.describeOperation());
+        bloqueSwap.setText(proceso.isSuspended() && proceso.getSwapStartBlock() >= 0
+                ? "desde el bloque " + proceso.getSwapStartBlock()
+                : "-");
     }
 }

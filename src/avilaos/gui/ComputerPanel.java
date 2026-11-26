@@ -62,6 +62,10 @@ public class ComputerPanel extends JPanel {
             new DefaultListModel<>();
     private final DefaultListModel<String> terminatedModel =
             new DefaultListModel<>();
+    private final DefaultListModel<String> readySuspendedModel =
+            new DefaultListModel<>();
+    private final DefaultListModel<String> blockedSuspendedModel =
+            new DefaultListModel<>();
 
     // Listas visibles
     private final JList<String> newList = new JList<>(newModel);
@@ -69,12 +73,21 @@ public class ComputerPanel extends JPanel {
     private final JList<String> blockedList = new JList<>(blockedModel);
     private final JList<String> terminatedList =
             new JList<>(terminatedModel);
+    private final JList<String> readySuspendedList =
+            new JList<>(readySuspendedModel);
+    private final JList<String> blockedSuspendedList =
+            new JList<>(blockedSuspendedModel);
 
     // Procesos correspondientes a las filas de cada lista
     private PCB[] newProcesses = new PCB[0];
     private PCB[] readyProcesses = new PCB[0];
     private PCB[] blockedProcesses = new PCB[0];
     private PCB[] terminatedProcesses = new PCB[0];
+    private PCB[] readySuspendedProcesses = new PCB[0];
+    private PCB[] blockedSuspendedProcesses = new PCB[0];
+
+    // Swap
+    private final JLabel swapLabel = new JLabel();
 
     // Proceso seleccionado
     private PCB selectedProcess;
@@ -91,7 +104,7 @@ public class ComputerPanel extends JPanel {
                 "Computador " + computer.getId()));
 
         // Parte superior: política, quantum y RAM
-        JPanel top = new JPanel(new GridLayout(3, 2, 5, 5));
+        JPanel top = new JPanel(new GridLayout(4, 2, 5, 5));
 
         top.add(new JLabel("Política:"));
         top.add(policySelector);
@@ -102,6 +115,9 @@ public class ComputerPanel extends JPanel {
         top.add(new JLabel("RAM:"));
         ramBar.setStringPainted(true);
         top.add(ramBar);
+
+        top.add(new JLabel("Swap (disco):"));
+        top.add(swapLabel);
 
         // Mostrar la política y el quantum con que arrancó el computador (por ejemplo, de un JSON)
         policySelector.setSelectedItem(computer.getPolicy().getType());
@@ -131,6 +147,24 @@ public class ComputerPanel extends JPanel {
         configurarLista(readyList);
         configurarLista(blockedList);
         configurarLista(terminatedList);
+        configurarLista(readySuspendedList);
+        configurarLista(blockedSuspendedList);
+
+        readySuspendedList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()
+                    && readySuspendedList.getSelectedIndex() >= 0) {
+                seleccionarProceso(
+                        readySuspendedProcesses[readySuspendedList.getSelectedIndex()]);
+            }
+        });
+
+        blockedSuspendedList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()
+                    && blockedSuspendedList.getSelectedIndex() >= 0) {
+                seleccionarProceso(
+                        blockedSuspendedProcesses[blockedSuspendedList.getSelectedIndex()]);
+            }
+        });
 
         newList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()
@@ -165,12 +199,14 @@ public class ComputerPanel extends JPanel {
             }
         });
 
-        // Las cuatro colas
-        JPanel queues = new JPanel(new GridLayout(2, 2, 5, 5));
+        // Las seis colas del modelo de siete estados (el séptimo, Ejecución, es la CPU)
+        JPanel queues = new JPanel(new GridLayout(2, 3, 5, 5));
         queues.add(queuePanel("Nuevos", newList));
         queues.add(queuePanel("Listos", readyList));
-        queues.add(queuePanel("Bloqueados", blockedList));
+        queues.add(queuePanel("Listo/Suspendido", readySuspendedList));
         queues.add(queuePanel("Terminados", terminatedList));
+        queues.add(queuePanel("Bloqueados", blockedList));
+        queues.add(queuePanel("Bloqueado/Suspendido", blockedSuspendedList));
 
         // Botón de detalles
         detailsButton.addActionListener(e -> abrirDetalles());
@@ -249,6 +285,18 @@ public class ComputerPanel extends JPanel {
         terminatedProcesses =
                 obtenerProcesos(kernel.getTerminatedQueue());
         actualizarLista(terminatedModel, terminatedProcesses);
+
+        readySuspendedProcesses =
+                obtenerProcesos(kernel.getReadySuspendedQueue());
+        actualizarLista(readySuspendedModel, readySuspendedProcesses);
+
+        blockedSuspendedProcesses =
+                obtenerProcesos(kernel.getBlockedSuspendedQueue());
+        actualizarLista(blockedSuspendedModel, blockedSuspendedProcesses);
+
+        swapLabel.setText(computer.getDisk().countFreeSwapBlocks() + " de "
+                + computer.getDisk().getSwapBlockCount() + " bloques libres | suspensiones: "
+                + kernel.getSuspensionCount() + " | reactivaciones: " + kernel.getReactivationCount());
     }
 
     private PCB[] obtenerProcesos(LinkedQueue<PCB> queue) {
@@ -264,6 +312,15 @@ public class ComputerPanel extends JPanel {
 
     private void actualizarLista(
             DefaultListModel<String> model, PCB[] procesos) {
+
+        // Solo se rehace la lista si cambió (así no se pierde la selección)
+        boolean same = model.getSize() == procesos.length;
+        for (int i = 0; same && i < procesos.length; i++) {
+            same = model.get(i).equals(describe(procesos[i]));
+        }
+        if (same) {
+            return;
+        }
 
         model.clear();
 
@@ -323,6 +380,14 @@ public class ComputerPanel extends JPanel {
                 + " | " + p.getMemoryRequired() + " MB"
                 + "<br>resta " + p.getRemainingInstructions() + " instr.";
 
+        if (!"-".equals(p.describeOperation())) {
+            text += "<br>" + escape(p.describeOperation());
+        }
+
+        if (p.isSuspended() && p.getSwapStartBlock() >= 0) {
+            text += "<br><font color='#5A3E9B'>en swap desde bloque " + p.getSwapStartBlock() + "</font>";
+        }
+
         if (p.getBlockReason() != BlockReason.NONE) {
             text += "<br><font color='#B00020'>"
                     + shortReason(p.getBlockReason()) + "</font>";
@@ -340,6 +405,8 @@ public class ComputerPanel extends JPanel {
         switch (reason) {
             case IO:
                 return "E/S";
+            case DISK_IO:
+                return "E/S de disco";
             default:
                 return reason.getLabel();
         }
