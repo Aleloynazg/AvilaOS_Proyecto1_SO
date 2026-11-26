@@ -1,110 +1,164 @@
 package avilaos.gui;
 
 import avilaos.config.ConfigStore;
-import avilaos.config.SimulationConfig;
-import avilaos.kernel.scheduler.SchedulingPolicyType;
-import java.awt.GridLayout;
+import avilaos.config.FileSystemConfig;
+import avilaos.config.ProcessesConfig;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.io.File;
 import java.io.IOException;
-import java.text.ParseException;
-import javax.swing.JComboBox;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JSpinner;
-import javax.swing.SpinnerNumberModel;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
- * Vista de configuración inicial del computador: RAM, política, quantum y
- * duración del ciclo; o cargar todo desde un archivo JSON.
- * Los spinners solo aceptan números dentro de su rango.
- * (En la F5.1 se reemplaza por la carga obligatoria de los dos JSON.)
+ * Vista inicial del Proyecto 2. Antes de arrancar el reloj hay que cargar los DOS
+ * archivos JSON: el de procesos y configuración, y el del sistema de archivos.
+ * El botón "Iniciar simulación" solo se habilita cuando ambos están cargados.
  */
-public class StartupDialog {
+public class StartupDialog extends JDialog {
 
-    private static final String START = "Iniciar simulación";
-    private static final String LOAD = "Cargar archivo JSON...";
-    private static final String EXIT = "Salir";
+    /** Lo que se cargó: los dos archivos ya leídos y validados. */
+    public static final class Result {
+        public final ProcessesConfig processes;
+        public final FileSystemConfig fileSystem;
 
-    private final JSpinner cycleMs = spinner(500, SimulationConfig.MIN_CYCLE_MS,
-            SimulationConfig.MAX_CYCLE_MS, 50);
-    private final JSpinner ram = spinner(1024, SimulationConfig.MIN_RAM,
-            SimulationConfig.MAX_RAM, 128);
-    private final JComboBox<SchedulingPolicyType> policy = new JComboBox<>(SchedulingPolicyType.values());
-    private final JSpinner quantum = spinner(4, SimulationConfig.MIN_QUANTUM,
-            SimulationConfig.MAX_QUANTUM, 1);
-
-    /**
-     * Muestra la vista hasta que el usuario elige una configuración válida.
-     * Devuelve null si decide salir.
-     */
-    public SimulationConfig mostrar() {
-        JPanel form = buildForm();
-
-        while (true) {
-            int option = JOptionPane.showOptionDialog(null, form, "ÁvilaOS – Configuración",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null,
-                    new Object[] { START, LOAD, EXIT }, START);
-
-            if (option == 2 || option == JOptionPane.CLOSED_OPTION) {
-                return null;
-            }
-            try {
-                if (option == 1) {
-                    SimulationConfig loaded = loadFromFile();
-                    if (loaded != null) {
-                        return loaded;
-                    }
-                } else {
-                    return readForm();
-                }
-            } catch (IllegalArgumentException | IOException | ParseException ex) {
-                JOptionPane.showMessageDialog(null, ex.getMessage(), "Configuración inválida",
-                        JOptionPane.ERROR_MESSAGE);
-            }
+        Result(ProcessesConfig processes, FileSystemConfig fileSystem) {
+            this.processes = processes;
+            this.fileSystem = fileSystem;
         }
     }
 
-    private JPanel buildForm() {
-        JPanel form = new JPanel(new GridLayout(0, 2, 8, 6));
-        form.add(new JLabel("Duración del ciclo (ms, 50-5000):"));
-        form.add(cycleMs);
-        form.add(new JLabel("RAM (MB, 128-8192):"));
-        form.add(ram);
-        form.add(new JLabel("Política de CPU inicial:"));
-        form.add(policy);
-        form.add(new JLabel("Quantum (1-20):"));
-        form.add(quantum);
-        return form;
+    private ProcessesConfig processes;
+    private FileSystemConfig fileSystem;
+    private Result result;
+
+    private final JLabel processesLabel = new JLabel("(sin cargar)");
+    private final JLabel fileSystemLabel = new JLabel("(sin cargar)");
+    private final JButton startButton = new JButton("Iniciar simulación");
+
+    public StartupDialog() {
+        super((java.awt.Frame) null, "ÁvilaOS – Cargar configuración", true);
+        setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(6, 6, 6, 6);
+        c.anchor = GridBagConstraints.WEST;
+
+        JLabel intro = new JLabel("<html>Para iniciar el reloj hay que cargar los <b>dos</b> archivos JSON.<br>"
+                + "Los del enunciado están en la carpeta <i>config/p2</i> del proyecto.</html>");
+        c.gridx = 0; c.gridy = 0; c.gridwidth = 3;
+        form.add(intro, c);
+        c.gridwidth = 1;
+
+        JButton loadProcesses = new JButton("Cargar procesos (JSON)…");
+        JButton loadFileSystem = new JButton("Cargar sistema de archivos (JSON)…");
+        loadProcesses.addActionListener(e -> cargarProcesos());
+        loadFileSystem.addActionListener(e -> cargarSistemaArchivos());
+
+        c.gridx = 0; c.gridy = 1;
+        form.add(new JLabel("1. Procesos y configuración:"), c);
+        c.gridx = 1;
+        form.add(loadProcesses, c);
+        c.gridx = 2;
+        form.add(processesLabel, c);
+
+        c.gridx = 0; c.gridy = 2;
+        form.add(new JLabel("2. Sistema de archivos:"), c);
+        c.gridx = 1;
+        form.add(loadFileSystem, c);
+        c.gridx = 2;
+        form.add(fileSystemLabel, c);
+
+        JButton exitButton = new JButton("Salir");
+        startButton.setEnabled(false);
+        startButton.addActionListener(e -> {
+            result = new Result(processes, fileSystem);
+            setVisible(false);
+        });
+        exitButton.addActionListener(e -> {
+            result = null;
+            setVisible(false);
+        });
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttons.add(exitButton);
+        buttons.add(startButton);
+
+        setLayout(new BorderLayout());
+        add(form, BorderLayout.CENTER);
+        add(buttons, BorderLayout.SOUTH);
+        pack();
+        setLocationRelativeTo(null);
     }
 
-    private SimulationConfig readForm() throws ParseException {
-        cycleMs.commitEdit();
-        ram.commitEdit();
-        quantum.commitEdit();
-
-        SimulationConfig config = SimulationConfig.defaults();
-        config.cycleDurationMs = (Integer) cycleMs.getValue();
-        config.computer.ramMb = (Integer) ram.getValue();
-        config.computer.policy = ((SchedulingPolicyType) policy.getSelectedItem()).name();
-        config.computer.quantum = (Integer) quantum.getValue();
-        config.validate();
-        return config;
+    /** Muestra la vista y espera. Devuelve los dos archivos, o null si se eligió Salir. */
+    public Result mostrar() {
+        result = null;
+        setVisible(true);
+        return result;
     }
 
-    /** Devuelve null si el usuario cancela el selector de archivos. */
-    private SimulationConfig loadFromFile() throws IOException {
-        JFileChooser chooser = new JFileChooser(new File("."));
-        chooser.setFileFilter(new FileNameExtensionFilter("Configuración JSON (*.json)", "json"));
-        if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) {
+    private File elegirArchivo(String titulo) {
+        File folder = new File("config/p2");
+        JFileChooser chooser = new JFileChooser(folder.isDirectory() ? folder : new File("."));
+        chooser.setDialogTitle(titulo);
+        chooser.setFileFilter(new FileNameExtensionFilter("Archivo JSON (*.json)", "json"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
             return null;
         }
-        return ConfigStore.load(chooser.getSelectedFile());
+        return chooser.getSelectedFile();
     }
 
-    private static JSpinner spinner(int value, int min, int max, int step) {
-        return new JSpinner(new SpinnerNumberModel(value, min, max, step));
+    private void cargarProcesos() {
+        File file = elegirArchivo("Elegir el JSON de procesos y configuración");
+        if (file == null) {
+            return;
+        }
+        try {
+            ProcessesConfig loaded = ConfigStore.loadProcesses(file);
+            loaded.validate();
+            processes = loaded;
+            processesLabel.setText("✔ " + file.getName());
+        } catch (IOException | RuntimeException ex) {
+            processes = null;
+            processesLabel.setText("(sin cargar)");
+            JOptionPane.showMessageDialog(this, "No se pudo cargar " + file.getName() + ":\n" + ex.getMessage(),
+                    "Archivo de procesos inválido", JOptionPane.ERROR_MESSAGE);
+        }
+        actualizarBoton();
+    }
+
+    private void cargarSistemaArchivos() {
+        File file = elegirArchivo("Elegir el JSON del sistema de archivos");
+        if (file == null) {
+            return;
+        }
+        try {
+            FileSystemConfig loaded = ConfigStore.loadFileSystem(file);
+            loaded.validate();
+            fileSystem = loaded;
+            fileSystemLabel.setText("✔ " + file.getName());
+        } catch (IOException | RuntimeException ex) {
+            fileSystem = null;
+            fileSystemLabel.setText("(sin cargar)");
+            JOptionPane.showMessageDialog(this, "No se pudo cargar " + file.getName() + ":\n" + ex.getMessage(),
+                    "Archivo del sistema de archivos inválido", JOptionPane.ERROR_MESSAGE);
+        }
+        actualizarBoton();
+    }
+
+    private void actualizarBoton() {
+        startButton.setEnabled(processes != null && fileSystem != null);
+        pack();
     }
 }
