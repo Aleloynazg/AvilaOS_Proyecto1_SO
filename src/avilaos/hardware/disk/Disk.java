@@ -638,6 +638,11 @@ public class Disk implements ClockListener{
         return swapStart;
     }
 
+    public DiskRequest getCurrentRequest() {
+        return currentRequest;
+    }
+    
+    
     public int getCurrentHead() {
         return currentHead;
     }
