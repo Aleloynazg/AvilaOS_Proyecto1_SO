@@ -1,92 +1,199 @@
-# ÁvilaOS – Simulador de un sistema operativo distribuido
+# ÁvilaOS – Simulador de un sistema operativo con disco, sistema de archivos y swap
 
-Proyecto 1 de Sistemas Operativos (2627-1). Simula un clúster de 2 a 4
-computadores, cada uno con su CPU, su RAM y su propio núcleo (planificador y
-colas), sincronizados por un reloj global. Los procesos productores y
-consumidores se comunican por buffers de capacidad limitada sincronizados con
-semáforos, en el mismo computador o en otro (con latencia de red).
+Proyecto 2 de Sistemas Operativos (2627-1). Simula **un computador** con su CPU,
+su RAM y un disco de 300 bloques (200 para archivos y 100 de swap), todo
+sincronizado por un reloj global. Los procesos hacen operaciones de archivos
+(`CREATE`, `READ`, `UPDATE`, `DELETE`): el kernel las convierte en solicitudes
+al disco, que las atiende con una de cinco políticas. Si falta RAM para admitir
+un proceso, el planificador a mediano plazo suspende a uno Bloqueado y lo manda
+al swap (siete estados).
+
+Del Proyecto 1 se conservan el planificador de CPU (FCFS, Round Robin,
+Priority y EDF), la memoria, el PCB y el modelo de instrucciones. El clúster de
+varios computadores, la red y los buffers productor-consumidor ya no existen.
 
 ## Requisitos
 
-- **Java 21 o superior** (el proyecto compila con nivel 21 y se probó con JDK 27).
-- **NetBeans** (el proyecto es un proyecto Ant de NetBeans).
+- **JDK 21 o superior** (el proyecto está configurado con nivel 21 y se probó
+  con JDK 27).
+- **NetBeans** (proyecto Ant).
 - Librerías incluidas en `lib/` (no hay que descargar nada):
-  - `gson-2.14.0.jar`: leer y guardar la configuración en JSON.
-  - `jfreechart-1.5.6.jar`: gráfica de utilización de CPU.
+  - `gson-2.14.0.jar`: leer y guardar los JSON.
+  - `jfreechart-1.5.6.jar`: gráficas.
 
 ## Cómo abrirlo y ejecutarlo
 
 1. Clonar el repositorio y, en NetBeans, `File > Open Project` y elegir la
-   carpeta `AvilaOS_Proyecto1_SO`.
+   carpeta del proyecto.
 2. Si NetBeans pregunta por la plataforma Java, elegir un JDK 21 o superior
-   (`Tools > Java Platforms`). Las dos librerías ya están en el classpath.
+   (`Tools > Java Platforms`).
 3. `Run > Run Project` (F6). La clase principal es `avilaos.AvilaOS`.
-4. Aparece la **vista de configuración**: número de computadores (2-4),
-   duración del ciclo, latencia de red y, por computador, RAM, política inicial
-   y quantum. También se puede **cargar un archivo JSON** (por ejemplo
-   `config/ejemplo.json`, que trae buffers y procesos productores/consumidores
-   locales y remotos).
-5. En la ventana principal: **Iniciar** arranca el reloj.
+4. Aparece la ventana de carga: hay que elegir el **JSON de procesos y
+   configuración** y el **JSON del sistema de archivos** (los del enunciado están
+   en `config/p2/`). *Iniciar simulación* se habilita cuando los dos están
+   cargados; si un archivo es inválido, un mensaje explica por qué.
+5. En la ventana principal, **Iniciar** arranca el reloj.
 
 ## Qué se ve en la ventana
 
-- Por computador: proceso en CPU (PC, prioridad, deadline), modo (usuario /
-  sistema operativo), colas de nuevos, listos, bloqueados (con el motivo) y
-  terminados, ocupación de la RAM, política en uso con selector y quantum.
-  Seleccionar un proceso y pulsar *Ver detalles del PCB* muestra su PCB.
-- Global: ciclo de reloj, panel de buffers (elementos, capacidad, valores de
-  los semáforos `s`, `n`, `e` y procesos esperando) y log de eventos.
-- Botones: **Crear proceso**, **Crear buffer**, **Ver métricas** (por
-  computador, del sistema completo y de productor-consumidor),
-  **Ver gráficas** (utilización de CPU de todos los computadores en un mismo
-  gráfico), **Guardar configuración** y la duración del ciclo en ejecución.
+- **Barra superior:** ciclo de reloj, *Iniciar* y *Pausar*, duración del ciclo,
+  política de disco (se puede cambiar en ejecución), modo *Administrador* o
+  *Usuario* y nombre de usuario.
+- **Árbol del sistema de archivos** (izquierda): al elegir un elemento muestra su
+  ruta, tipo, tamaño, dueño, permisos, primer bloque, proceso creador y cadena de
+  bloques.
+- **Pestaña Computador:** proceso en CPU, política de CPU y quantum, RAM, swap
+  (bloques libres, suspensiones y reactivaciones) y las colas de Nuevos, Listos,
+  Bloqueados (con el motivo), Terminados, Listo suspendido y Bloqueado
+  suspendido. *Ver detalles del PCB* muestra el PCB del proceso elegido.
+- **Pestaña Disco:** posición, dirección y velocidad del cabezal, mapa de bloques
+  (un color por archivo y la zona de swap con el proceso dueño), cola de E/S del
+  disco y tabla de asignación de archivos.
+- **Log de eventos** (abajo): lo que hacen la CPU, el disco y el planificador a
+  mediano plazo en cada ciclo.
+- **Botones:** *Crear proceso* (CPU bound o I/O bound), *Operación de archivo…* (crea un proceso que hace
+  CREATE, READ, UPDATE o DELETE; si no hay permiso, explica el motivo sin detener
+  la simulación), *Ver métricas*, *Gráfica CPU*, *Gráfica del cabezal*
+  (desplazamiento acumulado; empieza una serie nueva al cambiar de política),
+  *Guardar procesos (JSON)* y *Guardar sistema de archivos (JSON)*.
 
-Todos los campos de entrada validan tipo y rango; un dato inválido muestra un
-mensaje y no detiene la simulación.
+## Los dos archivos JSON
 
-## Archivo de configuración (JSON)
+La simulación se arma con **dos** archivos, los dos obligatorios. En `config/p2/`
+están los del enunciado (`sistema_archivos_enunciado.json` y
+`procesos_enunciado.json`) y uno para ver la suspensión (`suspension.json`).
 
-*Guardar configuración* escribe computadores (RAM, política, quantum),
-latencia, duración del ciclo, buffers (capacidad y anfitrión) y todos los
-procesos con sus atributos iniciales. Se carga desde la vista de configuración.
+### 1. Sistema de archivos
 
 ```json
 {
-  "cycleDurationMs": 300,
-  "networkLatency": 3,
-  "computers": [ { "ramMb": 1024, "policy": "ROUND_ROBIN", "quantum": 4 },
-                 { "ramMb": 1024, "policy": "EDF", "quantum": 4 } ],
-  "buffers":   [ { "capacity": 3, "host": 1 } ],
-  "processes": [ { "name": "Prod", "computer": 1, "type": "PRODUCER", "priority": 2,
-                   "memory": 100, "deadline": 300, "buffer": 1,
-                   "cyclesPerItem": 2, "items": 6 } ]
+  "diskConfig": { "totalBlocks": 200, "initialHead": 50 },
+  "fileSystem": [
+    { "path": "/mbr.bin", "type": "FILE", "startBlock": 0, "blocks": 11,
+      "owner": "admin", "permissions": "public" },
+    { "path": "/sistema", "type": "DIRECTORY", "owner": "admin", "permissions": "public" }
+  ]
 }
 ```
 
-- `policy`: `FCFS`, `ROUND_ROBIN`, `PRIORITY_PREEMPTIVE`, `EDF`.
-- `type`: `CPU_BOUND`, `IO_BOUND`, `PRODUCER`, `CONSUMER`.
-- `buffer` es la posición (desde 1) del buffer en la lista `buffers`.
-- Rangos válidos: ver `DECISIONES.md`, sección 5.
+- `totalBlocks`: bloques de la zona de archivos (entre 100 y 500). El swap se
+  suma aparte con `swapSizeBlocks` del otro archivo.
+- `initialHead`: bloque donde empieza el cabezal.
+- `type`: `FILE` o `DIRECTORY`; `permissions`: `public` o `private`.
+- Un archivo fragmentado puede traer `"chain": [0, 1, 2, 5]` (sus bloques en
+  orden). Los del enunciado no lo usan.
+- Al cargarlo se valida: bloques fuera de rango, bloques solapados y rutas sin
+  directorio padre se rechazan con un mensaje claro.
+
+### 2. Procesos y configuración
+
+```json
+{
+  "globalConfig": { "cycleDurationMs": 300, "swapSizeBlocks": 100, "initialDiskPolicy": "FIFO" },
+  "computer": { "ramCapacity": 1024, "policy": "FCFS", "quantum": 0 },
+  "processes": [
+    { "name": "Proc_95", "memory": 16, "deadline": 500, "instructions": 2,
+      "targetPath": "/sistema/config.sys", "operation": "READ" }
+  ]
+}
+```
+
+- `initialDiskPolicy`: `FIFO`, `SSTF`, `SCAN`, `C-SCAN` o `LOOK`.
+- `policy` (CPU): `FCFS`, `ROUND_ROBIN`, `PRIORITY_PREEMPTIVE` o `EDF`; `quantum`
+  solo lo usa Round Robin.
+- `operation`: `CREATE`, `READ`, `UPDATE` o `DELETE` sobre `targetPath`.
+- Campos opcionales de `globalConfig`: `headSpeed` (posiciones del cabezal por
+  ciclo, de 1 a 100; por defecto 1) e `initialDirection` (`UP` o `DOWN`).
+- Campos opcionales de un proceso: `priority` (1 a 10, por defecto 5), `newName`
+  (`UPDATE`), `blocks`, `owner`, `permissions` y `targetType` (`CREATE`) y
+  `type`. Sin `type` el proceso es de E/S de archivos; también puede ser
+  `CPU_BOUND` o `IO_BOUND` (con `ioEvery` e `ioDuration`).
+- Rangos: `cycleDurationMs` de 50 a 5000, `ramCapacity` de 128 a 8192, `quantum`
+  de 1 a 20, `swapSizeBlocks` de 0 a 1000.
+
+### Cargarlos desde código
+
+```java
+FileSystemConfig fs = ConfigStore.loadFileSystem(new File("config/p2/sistema_archivos_enunciado.json"));
+ProcessesConfig pr = ConfigStore.loadProcesses(new File("config/p2/procesos_enunciado.json"));
+SimulationFactory.Simulation sim = SimulationFactory.createP2(pr, fs);
+// sim.clock (reloj) y sim.computer (computador con disco, kernel y sistema de archivos)
+```
+
+Para guardar el estado actual del sistema de archivos:
+`ConfigStore.saveFileSystem(FileSystemConfig.fromState(computer.getFileSystem(), computer.getDisk()), file)`.
+
+## Cómo funciona
+
+- **Disco:** 200 bloques de archivos (0 a 199) y 100 de swap (200 a 299) por
+  defecto, con asignación encadenada. Atender una solicitud cuesta 1 ciclo
+  para tomarla, los ciclos que tarda el cabezal en llegar al bloque (distancia
+  ÷ `headSpeed`, redondeado hacia arriba) y 1 ciclo por bloque transferido.
+  Políticas: FIFO, SSTF, SCAN, C-SCAN y LOOK. Con el anexo del enunciado dan
+  518, 208, 332 y 192 bloques recorridos (FIFO, SSTF, SCAN y C-SCAN);
+  `PoliticasDiscoPrueba` lo comprueba.
+- **Sistema de archivos:** árbol propio de directorios y archivos con dueño,
+  ruta, bloques y color. Modo `ADMIN` o `USER` y permisos `public` o `private`:
+  un usuario lee lo propio y lo público, crea solo en sus directorios y elimina
+  solo sus archivos; renombrar es solo de `ADMIN`. Una operación imposible
+  (ruta que no existe, sin permiso, sin bloques) termina el proceso con
+  `IO_FAILED` y queda explicada en el log, sin detener la simulación.
+- **Procesos de E/S:** ejecutan una instrucción `DISK_REQUEST` en modo sistema
+  operativo. El proceso queda `BLOCKED` con motivo `DISK_IO` hasta que el disco
+  termina; entonces el kernel aplica la operación y lo despierta.
+- **Siete estados y swap:** Nuevo, Listo, Ejecución, Bloqueado, Terminado, más
+  Listo suspendido y Bloqueado suspendido. Si un Nuevo no cabe en la RAM, el
+  `MediumTermScheduler` suspende a Bloqueados (el de menor prioridad y, si hay
+  empate, el que lleva más tiempo bloqueado): el disco escribe su memoria en
+  el swap (1 bloque por MB) con una solicitud `SUSPEND`. Cuando hay RAM, los
+  Listos suspendidos se reactivan por prioridad con `RESUME`, antes que los
+  Nuevos. El log cuenta cada paso (`Se suspende a ... para admitir a ...`).
+
+Las reglas que el enunciado deja abiertas están en [`DECISIONES.md`](DECISIONES.md):
+disco y swap (secciones 7 a 9), permisos (10), integración con los procesos (11)
+y las decisiones de implementación del Proyecto 2 (12).
 
 ## Estructura del código
 
 | Paquete | Contenido |
 | --- | --- |
-| `avilaos.hardware` | Reloj global, CPU, `Computer`, `Cluster`, métricas |
-| `avilaos.kernel` | `Kernel` (colas y admisión por memoria) |
-| `avilaos.kernel.process` | PCB, enums de estado/tipo/bloqueo, modelo de instrucciones |
-| `avilaos.kernel.scheduler` | Interfaz `SchedulingPolicy` y las 4 políticas |
+| `avilaos.hardware` | Reloj global, CPU, `Computer` (un computador con disco), métricas |
+| `avilaos.hardware.disk` | `Disk`, `DiskBlock`, estado y dirección del cabezal |
+| `avilaos.kernel` | `Kernel`: colas (incluidas las de suspendidos), admisión por memoria, E/S de archivos |
+| `avilaos.kernel.process` | PCB, enums de estado/tipo/bloqueo/operación, instrucciones, `ProcessFactory` |
+| `avilaos.kernel.scheduler` | Políticas de CPU y `MediumTermScheduler` (suspender y reactivar) |
+| `avilaos.kernel.disk` | `DiskRequest`, `DiskScheduler` y las 5 políticas de disco |
+| `avilaos.kernel.fs` | Árbol de archivos, `FileSystem`, `AccessControl` (permisos) y `FileIoManager` |
+| `avilaos.kernel.swap` | `SwapArea`: reserva de bloques de swap por proceso |
 | `avilaos.kernel.memory` | Control de RAM usada y libre |
-| `avilaos.kernel.sync` | Semáforos, `Buffer`, `SyncExecutor` (productor-consumidor) |
-| `avilaos.structures` | `LinkedQueue`: estructura propia (no se usan colecciones de Java) |
-| `avilaos.config` | Configuración JSON y fábrica de la simulación |
+| `avilaos.structures` | `LinkedQueue`: estructura propia (no se usan colecciones de `java.util`) |
+| `avilaos.config` | Los dos JSON, `ConfigStore` y `SimulationFactory` |
 | `avilaos.gui` | Ventanas: solo observan al sistema, no contienen lógica del SO |
-
-Las reglas que el enunciado deja abiertas (prioridades, deadline, bloqueos,
-métricas, valores por defecto) están en [`DECISIONES.md`](DECISIONES.md).
 
 ## Pruebas
 
-Las clases `*Prueba.java` son programas con `main` que se ejecutan desde
-NetBeans (clic derecho > *Run File*): semáforos, buffer, `SyncExecutor`,
-latencia remota, memoria, cola enlazada y escenario local/remoto.
+Las clases `*Prueba.java` son programas con `main` (21 en total). Se corren desde
+NetBeans (clic derecho > *Run File*) **con la raíz del proyecto como carpeta de
+trabajo**, porque algunas leen `config/p2/`. Terminan con código 1 si alguna
+comprobación falla.
+
+| Área | Clases |
+| --- | --- |
+| Disco | `DiskPrueba`, `DiskEncadenadoPrueba`, `DiskTamanoPrueba`, `DiskIntegracionPrueba`, `DiskVelocidadPrueba`, `PoliticasDiscoPrueba` |
+| Sistema de archivos | `FileSystemPrueba`, `AccessControlPrueba`, `FileSystemJsonPrueba` |
+| Procesos de E/S | `ProcesoArchivosPrueba`, `ComputerArchivosPrueba`, `ProcesosJsonPrueba`, `IntegracionP2Prueba` |
+| Siete estados y suspensión | `SieteEstadosPrueba`, `SwapAreaPrueba`, `MediumTermSchedulerPrueba`, `SuspensionPrueba` |
+| Base del Proyecto 1 | `KernelPrueba`, `MemoryManagerPrueba`, `InstructionModelPrueba`, `LinkedQueuePrueba` |
+
+Para correr una desde la consola, en la raíz del proyecto:
+
+```powershell
+javac -encoding UTF-8 -cp "lib/*" -d out (Get-ChildItem -Recurse src -Filter *.java).FullName
+java -cp "out;lib/*" avilaos.hardware.disk.PoliticasDiscoPrueba
+```
+
+## Experimentos
+
+La comparación de las políticas de disco y del efecto de la suspensión (tablas,
+gráficas, capturas y conclusiones) está en
+[`docs/experimentos/`](docs/experimentos/README.md).
